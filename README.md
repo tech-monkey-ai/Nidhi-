@@ -32,7 +32,7 @@ Everyday earners deserve an app that respects them — not a stripped-down "budg
 3. **Greeting screen** — ask for the user's name. Personalizes the app ("Good evening, Ramesh").
 4. **Financial picture setup** — approximate income, existing EMIs/loans (amount + duration + description), monthly savings goal, emergency fund target. All manual entry via large numpads — no AI parsing.
 5. **Confirmation screen** — recaps everything with per-field edit options.
-6. **Success celebration** — animated checkmark + warm welcome.
+
 
 ### Dashboard (Home)
 - Time-of-day greeting using the user's name ("Good evening, Ramesh")
