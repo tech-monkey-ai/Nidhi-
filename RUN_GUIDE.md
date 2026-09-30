@@ -1,10 +1,12 @@
 # Nidhi — Complete Run Guide
 
-> **TL;DR for judges / testers**: `npm install --legacy-peer-deps` → `npm start` → scan QR with Expo Go. Voice + ads need a dev build: `npm run dev:android` (one-time, then `npm start`).
+> **TL;DR for judges / testers**: `npm install --legacy-peer-deps` → `eas build -p android --profile development` → sideload APK → `npm start`. Voice is currently broken on our side; everything else works.
 
 ---
 
-## Quick Start (Expo Go — UI testing, no voice/ads)
+## Quick Start (EAS dev build — the only supported test path)
+
+Nidhi is **Android-only** and uses native modules (`expo-audio`, `react-native-purchases`, `react-native-google-mobile-ads`) that aren't present in Expo Go. **Use the EAS dev build for all testing** — Expo Go is not supported.
 
 ### 1. Install Node.js 20+
 Download from https://nodejs.org/ (LTS version). Verify:
@@ -21,27 +23,44 @@ Unzip `nidhi-mobile.zip` anywhere on your computer.
 cd nidhi-mobile
 npm install --legacy-peer-deps
 ```
-Takes 1–3 minutes. The `--legacy-peer-deps` flag is required for Expo SDK 57. A `postinstall` script auto-runs to patch 2 known SDK 57 bugs (TypeScript type augmentation + missing polyfills file).
+Takes 1–3 minutes. The `--legacy-peer-deps` flag is required for Expo SDK 57. A `postinstall` script auto-runs to patch 4 known SDK 57 bugs (TS type augmentation, missing polyfills, `ErrorUtils` guard, `setUpErrorHandling` guard).
 
-### 4. Install Expo Go on your phone
-- **Android**: Play Store → search "Expo Go" → Install
-- **iPhone**: App Store → search "Expo Go" → Install
+### 4. Install EAS CLI and log in
+```bash
+npm i -g eas-cli
+eas login
+eas whoami    # verify you're logged in
+```
+Don't have an Expo account? Sign up free at https://expo.dev/signup — the free tier includes 15 Android builds/month.
 
-### 5. Connect phone + computer to the same Wi-Fi
-Critical — Expo Go talks to your computer over the local network.
+### 5. Build the dev APK in the cloud
+```bash
+eas build -p android --profile development
+```
+Takes 10–15 minutes the first time, ~5 minutes on subsequent builds (EAS caches the gradle/NDK layers). When it finishes, EAS prints a download link — click it to download the `.apk` file to your computer.
 
-### 6. Start the dev server
+### 6. Sideload the APK onto your Android phone
+1. Transfer the `.apk` to your phone (USB, Google Drive, Send Anywhere).
+2. On your phone, open the `.apk` file (use a file manager if needed).
+3. Allow "Install unknown apps" for your file manager / browser when prompted.
+4. Tap **Install**.
+5. Open **Nidhi** from your app drawer. You'll see a screen saying "Waiting for Metro" — that's the dev build waiting for the JS bundle from your computer.
+
+### 7. Connect phone + computer to the same Wi-Fi
+Critical — the dev build talks to Metro over the local network.
+
+### 8. Start the Metro dev server
 ```bash
 npm start
 ```
-A QR code appears in your terminal.
+The dev build on your phone auto-discovers Metro and loads the JS bundle. From here on, every code change hot-reloads instantly — no rebuild needed.
 
-### 7. Scan the QR code
-- **Android**: open Expo Go → tap "Scan QR code" → point at the QR
-- **iPhone**: open Camera app → point at the QR → tap "Expo Go" notification
+> The `npm start` script sets `EXPO_OFFLINE=1` automatically (via `cross-env`). This skips Expo's online version-check step which crashes on Node 20+ due to a known `@expo/cli` bug. If you ever need the online check, run `npm run start:online` instead.
 
-### 8. Use the app
+### 9. Use the app
 Language picker loads in ~10–30 seconds (first load bundles the JS). Pick a language, complete onboarding, explore the 5 tabs.
+
+> Your data is stored on your phone only — nothing is sent to any server. Uninstalling Nidhi wipes the data.
 
 ---
 
@@ -49,11 +68,13 @@ Language picker loads in ~10–30 seconds (first load bundles the JS). Pick a la
 
 The app works **100% without any API keys** — voice notes and ads silently no-op. You only need keys to test those specific features.
 
+> ⚠️ **Note on voice keys**: even with a valid `SARVAM_API_KEY`, voice notes are currently broken on our side (see **Known Issues** at the end of this guide). The key is still worth setting — it works the moment the `expo-audio` bug is fixed, and can be verified independently via curl.
+
 ### There are 3 places you can put keys. Use the one that matches your workflow:
 
 ---
 
-### Option A: Local `.env` file (for testing on your own phone)
+### Option A: Local `.env` file (for testing on your own phone via EAS dev build)
 
 **Step 1**: Create the file
 ```bash
@@ -66,9 +87,7 @@ cp .env.example .env
 ```env
 SARVAM_API_KEY=your_actual_sarvam_key_here
 REVENUECAT_ANDROID_KEY=your_actual_revenuecat_android_key_here
-REVENUECAT_IOS_KEY=your_actual_revenuecat_ios_key_here
 GOOGLE_ADS_ANDROID_APP_ID=
-GOOGLE_ADS_IOS_APP_ID=
 GOOGLE_ADS_BANNER_UNIT_ID=
 GOOGLE_ADS_INTERSTITIAL_UNIT_ID=
 ```
@@ -87,7 +106,6 @@ When you run `eas build`, your local `.env` file isn't uploaded. Set keys as enc
 eas login
 eas secret:create --name SARVAM_API_KEY        --value "your-sarvam-key"
 eas secret:create --name REVENUECAT_ANDROID_KEY --value "your-revenuecat-android-key"
-eas secret:create --name REVENUECAT_IOS_KEY     --value "your-revenuecat-ios-key"
 eas secret:create --name GOOGLE_ADS_ANDROID_APP_ID --value "ca-app-pub-XXXX~YYYY"
 eas secret:create --name GOOGLE_ADS_BANNER_UNIT_ID --value "ca-app-pub-XXXX/YYYY"
 eas secret:create --name GOOGLE_ADS_INTERSTITIAL_UNIT_ID --value "ca-app-pub-XXXX/YYYY"
@@ -168,77 +186,57 @@ Here's exactly what happens:
 
 | Feature | Without key | With key |
 |---|---|---|
-| Voice notes | Mic button shows "Set SARVAM_API_KEY to enable". Entry saves without a note. | Mic records → Sarvam transcribes → transcript stored |
+| Voice notes | Mic button shows "Set SARVAM_API_KEY to enable". Entry saves without a note. | Mic records → Sarvam transcribes → transcript stored (⚠️ currently broken — see Known Issues) |
 | RevenueCat | No-op (silently skips init) | Tracks ad revenue to your RC dashboard |
 | Google Ads | Banner renders labelled "Ad" placeholder. No interstitial. | Real banner + interstitial ads from AdMob |
-| Expo Go | All 3 above no-op (native modules not present) | N/A — use dev build |
 
 ---
 
-## Dev Build (for testing voice + ads — requires Android Studio)
+## Rebuilding the dev build
 
-Voice notes (`expo-audio` recording) and ads (`react-native-purchases` + `react-native-google-mobile-ads`) are native modules not included in Expo Go. To test them, you need a dev build.
+You only need to rebuild when you change something that requires native compilation:
+- Any file under `plugins/`
+- `app.config.ts` (permissions, plugins, SDK versions, ad unit IDs)
+- A new native dependency (a package that requires its own native module)
 
-### One-time setup
-
-1. Install Android Studio (https://developer.android.com/studio) — includes Android SDK
-2. Open Android Studio → SDK Manager → install Android SDK 35 (or latest)
-3. Connect your Android phone via USB (enable USB debugging in Developer Options) OR start an Android emulator
-
-### Build the dev APK + install on your device
+For pure JS/TS changes (anything under `src/`, `app/`, `App.tsx`, `src/strings/`), just keep `npm start` running — Metro hot-reloads instantly, no rebuild needed.
 
 ```bash
-npm run dev:android
+# Rebuild after native changes
+eas build -p android --profile development
+
+# Then re-sideload the new APK (uninstall the old one first if signing differs)
 ```
-This runs `expo run:android`, which:
-- Runs `expo prebuild` (generates `android/` folder)
-- Compiles the native Android project via Gradle
-- Installs the APK on your connected device/emulator
 
-First build takes **5–10 minutes** (Gradle downloads + compiles native code). Subsequent builds are much faster.
+### Build gotchas we already patched (don't undo these)
 
-### Subsequent runs
-
-After the dev build is installed, you don't need to rebuild every time. Just:
-```bash
-npm start
-```
-The dev build connects to the Metro dev server and hot-reloads on JS changes.
-
-### What works in Expo Go vs Dev Build
-
-| Feature | Expo Go | Dev Build |
-|---|---|---|
-| All UI / navigation | ✓ | ✓ |
-| Logging spending | ✓ | ✓ |
-| Savings / Emergency Fund | ✓ | ✓ |
-| Insights | ✓ | ✓ |
-| Settings (language, dark mode, notifications) | ✓ | ✓ |
-| Local notifications (Android) | ✓ | ✓ |
-| **Voice notes (Sarvam AI)** | ✗ | ✓ |
-| **RevenueCat ad attribution** | ✗ | ✓ |
-| **Google Mobile Ads (banner + interstitial)** | ✗ | ✓ |
-| Haptics | partial | ✓ |
+- `.npmrc` has `legacy-peer-deps=true`
+- `babel.config.js` uses `babel-preset-expo` only (no nativewind babel plugin)
+- `app.config.ts` sets `compileSdkVersion: 36`, `targetSdkVersion: 36`, `minSdkVersion: 24`, and uses `./plugins/with-gradle-version` to bump the Gradle JVM heap to 4 GB
+- `scripts/postinstall-patch.js` auto-applies 4 patches on every `npm install`
+- Pinned to **Gradle 9.3.1 + Kotlin 2.1.20** — do NOT upgrade to Gradle 9.4.1, it causes a Kotlin version mismatch crash at build time
 
 ---
 
-## Production Build (for Play Store)
+## Other build profiles (for distribution)
 
-### Build the AAB (Android App Bundle)
+### Preview build (release APK for QA / sharing)
+
+Use this when you want a standalone APK to share with testers, without Metro dev server dependency.
+
+```bash
+eas build -p android --profile preview
+```
+
+This produces a **release-mode APK** (no dev menu, no Metro dependency — runs standalone with the JS bundle baked in). Sideload it the same way as the dev build. Takes 15–20 minutes.
+
+### Production build (signed AAB for Play Store)
 
 ```bash
 eas build -p android --profile production
 ```
 
-EAS builds it in the cloud and gives you a downloadable `.aab` file. Takes 10–20 minutes.
-
-### Submit to Play Store
-
-```bash
-eas submit -p android --profile production
-```
-
-Or manually upload the `.aab` via the Play Console. See `PLAY_STORE_LISTING.md` for the full step-by-step guide.
+Produces a signed `.aab` ready for Play Console upload. See `README.md` → "Build for Google Play Store" for the full walkthrough.
 
 ---
 
@@ -246,16 +244,15 @@ Or manually upload the `.aab` via the Play Console. See `PLAY_STORE_LISTING.md` 
 
 | Key | Required? | What it does | Where to get it |
 |---|---|---|---|
-| `SARVAM_API_KEY` | Optional | Voice note transcription | https://sarvam.ai/ |
+| `SARVAM_API_KEY` | Optional | Voice note transcription (⚠️ currently broken — see Known Issues) | https://sarvam.ai/ |
 | `REVENUECAT_ANDROID_KEY` | Optional | Ad revenue attribution | https://app.revenuecat.com/ |
-| `REVENUECAT_IOS_KEY` | Optional (iOS only) | Ad attribution on iOS | https://app.revenuecat.com/ |
 | `GOOGLE_ADS_ANDROID_APP_ID` | Optional (defaults to test ID) | AdMob app ID | https://apps.admob.com/ |
 | `GOOGLE_ADS_BANNER_UNIT_ID` | Optional (defaults to test ID) | Banner ad unit | https://apps.admob.com/ |
 | `GOOGLE_ADS_INTERSTITIAL_UNIT_ID` | Optional (defaults to test ID) | Interstitial ad unit | https://apps.admob.com/ |
 
-> **For development**: leave the Google Ads keys BLANK — the app uses Google's official test ad unit IDs by default. This protects you from being flagged for invalid traffic on your real ad units.
+> **For development**: leave the Google Ads keys BLANK — the app uses Google's official **test ad unit IDs** by default. This protects you from being flagged for invalid traffic on your real ad units.
 
-> **For production**: set all keys via EAS secrets (Option B) before running `eas build`.
+> **For production**: set all keys via EAS secrets (Option B) before running `eas build -p android --profile production`.
 
 ---
 
@@ -275,17 +272,61 @@ Or manually upload the `.aab` via the Play Console. See `PLAY_STORE_LISTING.md` 
 ### `expo start` crashes with "Body is unusable: Body has already been read"
 The `npm start` script sets `EXPO_OFFLINE=1` to bypass this. If you ran `npx expo start` directly, use `npm start` instead.
 
-### App crashes on launch in Expo Go
-Make sure you're using the latest Expo Go (SDK 57). The app auto-detects Expo Go and skips native module calls (voice, ads) — they no-op silently.
+### Dev build can't connect to Metro ("Waiting for Metro" forever)
+- **Most common cause**: your phone and computer are on different networks. Verify both are on the same Wi-Fi.
+- In the dev build, shake your phone to open the dev menu → tap "Change Metro URL" → enter the URL shown in your terminal (something like `exp://192.168.1.42:8081`).
+- Restart the dev server: press `Ctrl+C` in your terminal, then `npm start` again.
+
+### Dev build shows "Network error" after loading
+- Your phone can't reach your computer. Check that:
+  - Both are on the same Wi-Fi network (not a guest network)
+  - Your computer's firewall isn't blocking port 8081
+  - On Windows: allow Node.js through the firewall when prompted
+- Try tunnel mode: `npm start -- --tunnel` (slower but works through firewalls). Then in the dev build, shake phone → Change Metro URL → enter the tunnel URL.
 
 ### Voice notes don't work
-Voice recording requires a dev build (`npm run dev:android`), not Expo Go. Also check that `SARVAM_API_KEY` is set in your `.env`.
+⚠️ **Currently broken on our side.** After `recorder.stop()` returns, `recorder.uri` is `null` in `src/components/ui/MicButton.tsx`, so no audio file is sent to Sarvam. The Sarvam API itself is fine — verify with:
+```bash
+curl -X POST https://api.sarvam.ai/speech-to-text \
+  -H "api-subscription-key: $SARVAM_API_KEY" \
+  -F "model=saaras:v4" \
+  -F "file=@sample.wav"
+```
+If the curl call returns a transcript, your key works — the bug is in our `expo-audio` integration. See **Known Issues** in the main README for the full diagnosis and fix plan.
 
 ### Ads don't show
-Ads require a dev build. Also check that `REVENUECAT_ANDROID_KEY` and Google Ads keys are set. In development, the app uses Google's test ad unit IDs — real ads only appear in production builds.
+Ads require the EAS dev build (not Expo Go). Also check that `REVENUECAT_ANDROID_KEY` and Google Ads keys are set. In development, the app uses Google's test ad unit IDs — real ads only appear in production builds.
+
+### `eas build` fails
+- Make sure you're logged in (`eas whoami`).
+- Check the build logs in the Expo dashboard (link in your terminal).
+- The build profile `development` in `eas.json` uses `buildType: apk` + `developmentClient: true` + `distribution: internal` — don't change these.
+- If the build fails with a Kotlin/Gradle error, verify the pinned versions: **Gradle 9.3.1 + Kotlin 2.1.20**. Don't upgrade to Gradle 9.4.1 (causes a Kotlin version mismatch crash).
 
 ### `npm install` fails with peer dependency errors
-Use `npm install --legacy-peer-deps` (required for Expo SDK 57).
+Use `npm install --legacy-peer-deps` (required for Expo SDK 57). A `.npmrc` with `legacy-peer-deps=true` is already in the repo, so a plain `npm install` should also work.
 
 ### Prebuild fails
 Run `node scripts/postinstall-patch.js` to apply the SDK 57 patches, then retry.
+
+---
+
+## Known Issues
+
+### ⚠️ Sarvam voice-notes flow is broken on our side (Sarvam API itself is fine)
+
+**Symptom**: User taps the mic button, records a voice note, stops recording, and sees "Couldn't transcribe — entry will still save without a note". The entry still saves correctly. No transcript is ever produced.
+
+**Root cause**: The bug is in `src/components/ui/MicButton.tsx`, in Nidhi's integration with `expo-audio`. After `recorder.stop()` returns, `recorder.uri` is `null` and the recording-status callback never fires with a valid `status.url`. No audio file is produced → no request is made to Sarvam → no transcript.
+
+**What's NOT the cause**:
+- ❌ Not a Sarvam outage or API issue — Sarvam's `saaras:v4` endpoint works fine when called directly with curl
+- ❌ Not a missing API key — `SARVAM_API_KEY` is read correctly
+- ❌ Not a permissions issue — `RECORD_AUDIO` permission is granted
+- ❌ Not an `expo-audio` SDK bug at the package level
+
+**Impact**: Voice notes are the only affected feature. Everything else (logging, savings, insights, notifications, ads, haptics) works fully.
+
+**Workaround**: Disable voice notes in Settings → "Voice notes" toggle off. The mic button is hidden and the logging flow works perfectly without it.
+
+See the main `README.md` → **Known Issues** section for the full suspected-fix-areas list.
