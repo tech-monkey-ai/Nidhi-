@@ -5,7 +5,7 @@
 If you discover a security vulnerability in Nidhi, please report it responsibly:
 
 1. **Do NOT open a public GitHub issue.**
-2. Email: `security@nidhi.app` (replace with your real address).
+2. Email: `nandangbsn@gmail.com`
 3. Include:
    - A clear description of the issue
    - Steps to reproduce
