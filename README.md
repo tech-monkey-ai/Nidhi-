@@ -938,9 +938,9 @@ These are deliberate product decisions, not technical limitations.
 
 ## License
 
-Proprietary. © Nidhi. All rights reserved.
+Proprietary. © Nandan Bhat. All rights reserved.
 
-For licensing inquiries: `hello@nidhi.app` (replace with your real address).
+For licensing inquiries: `nandangbsn@gmail.com` 
 
 ---
 
