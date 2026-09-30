@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FAF9F6"/>
+      <stop offset="100%" stop-color="#F0EDE3"/>
+    </linearGradient>
+    <linearGradient id="fg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#0F9D58"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <!-- Shield outline -->
+  <path d="M512 220 L780 320 V520 C780 700 660 820 512 860 C364 820 244 700 244 520 V320 Z"
+        fill="url(#fg)" stroke="#0A7E47" stroke-width="6" stroke-linejoin="round"/>
+  <!-- ₹ symbol -->
+  <text x="512" y="600" font-family="Arial, sans-serif" font-size="380" font-weight="900"
+        text-anchor="middle" fill="#FFFFFF">₹</text>
+</svg>

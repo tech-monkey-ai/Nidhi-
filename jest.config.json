@@ -1,0 +1,11 @@
+{
+  "preset": "jest-expo",
+  "setupFilesAfterEnv": ["<rootDir>/jest.setup.js"],
+  "transformIgnorePatterns": [
+    "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@unimodules/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg|react-native-reanimated|lucide-react-native|zustand|@react-native-async-storage|expo-audio)"
+  ],
+  "moduleNameMapper": {
+    "^@/(.*)$": "<rootDir>/src/$1"
+  },
+  "testPathIgnorePatterns": ["/node_modules/", "/android/", "/ios/"]
+}
