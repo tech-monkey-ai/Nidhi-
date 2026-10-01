@@ -1,6 +1,6 @@
 # Nidhi — Complete Run Guide
 
-> **TL;DR for judges / testers**: `npm install --legacy-peer-deps` → `eas build -p android --profile development` → sideload APK → `npm start`. Voice is currently broken on our side; everything else works.
+> **TL;DR for judges / testers**: `npm install --legacy-peer-deps` → `eas build -p android --profile development` → sideload APK → `npm start`. All features, including voice, are working.
 
 ---
 
@@ -68,7 +68,7 @@ Language picker loads in ~10–30 seconds (first load bundles the JS). Pick a la
 
 The app works **100% without any API keys** — voice notes and ads silently no-op. You only need keys to test those specific features.
 
-> ⚠️ **Note on voice keys**: even with a valid `SARVAM_API_KEY`, voice notes are currently broken on our side (see **Known Issues** at the end of this guide). The key is still worth setting — it works the moment the `expo-audio` bug is fixed, and can be verified independently via curl.
+> Voice notes work end-to-end once `SARVAM_API_KEY` is set — tap the mic, speak, and the transcript attaches to the entry. See **How the Keys Flow Through the App** below for how the key is read, and the curl command under **Troubleshooting** if you want to verify the key independently of the app.
 
 ### There are 3 places you can put keys. Use the one that matches your workflow:
 
@@ -186,7 +186,7 @@ Here's exactly what happens:
 
 | Feature | Without key | With key |
 |---|---|---|
-| Voice notes | Mic button shows "Set SARVAM_API_KEY to enable". Entry saves without a note. | Mic records → Sarvam transcribes → transcript stored (⚠️ currently broken — see Known Issues) |
+| Voice notes | Mic button shows "Set SARVAM_API_KEY to enable". Entry saves without a note. | Mic records → Sarvam transcribes → transcript stored |
 | RevenueCat | No-op (silently skips init) | Tracks ad revenue to your RC dashboard |
 | Google Ads | Banner renders labelled "Ad" placeholder. No interstitial. | Real banner + interstitial ads from AdMob |
 
@@ -244,7 +244,7 @@ Produces a signed `.aab` ready for Play Console upload. See `README.md` → "Bui
 
 | Key | Required? | What it does | Where to get it |
 |---|---|---|---|
-| `SARVAM_API_KEY` | Optional | Voice note transcription (⚠️ currently broken — see Known Issues) | https://sarvam.ai/ |
+| `SARVAM_API_KEY` | Optional | Voice note transcription | https://sarvam.ai/ |
 | `REVENUECAT_ANDROID_KEY` | Optional | Ad revenue attribution | https://app.revenuecat.com/ |
 | `GOOGLE_ADS_ANDROID_APP_ID` | Optional (defaults to test ID) | AdMob app ID | https://apps.admob.com/ |
 | `GOOGLE_ADS_BANNER_UNIT_ID` | Optional (defaults to test ID) | Banner ad unit | https://apps.admob.com/ |
@@ -285,14 +285,15 @@ The `npm start` script sets `EXPO_OFFLINE=1` to bypass this. If you ran `npx exp
 - Try tunnel mode: `npm start -- --tunnel` (slower but works through firewalls). Then in the dev build, shake phone → Change Metro URL → enter the tunnel URL.
 
 ### Voice notes don't work
-⚠️ **Currently broken on our side.** After `recorder.stop()` returns, `recorder.uri` is `null` in `src/components/ui/MicButton.tsx`, so no audio file is sent to Sarvam. The Sarvam API itself is fine — verify with:
+- Check that `SARVAM_API_KEY` is actually set (see **Where to Insert API Keys** above) — without it, the mic button shows "Set SARVAM_API_KEY to enable" and that's expected.
+- With a key set, watch the Metro terminal while you record. You should see `[voice] Sarvam response status: 200` followed by a transcript. If you see a `4xx`/`5xx` status instead, verify the key works independently:
 ```bash
 curl -X POST https://api.sarvam.ai/speech-to-text \
   -H "api-subscription-key: $SARVAM_API_KEY" \
   -F "model=saaras:v4" \
   -F "file=@sample.wav"
 ```
-If the curl call returns a transcript, your key works — the bug is in our `expo-audio` integration. See **Known Issues** in the main README for the full diagnosis and fix plan.
+A 200 response with a transcript means the key itself is fine, and the issue is elsewhere (check mic permissions on the phone). See **Resolved Issues** in the main `README.md` for the three bugs we found and fixed to get voice working.
 
 ### Ads don't show
 Ads require the EAS dev build (not Expo Go). Also check that `REVENUECAT_ANDROID_KEY` and Google Ads keys are set. In development, the app uses Google's test ad unit IDs — real ads only appear in production builds.
@@ -311,22 +312,6 @@ Run `node scripts/postinstall-patch.js` to apply the SDK 57 patches, then retry.
 
 ---
 
-## Known Issues
+## Resolved Issues
 
-### ⚠️ Sarvam voice-notes flow is broken on our side (Sarvam API itself is fine)
-
-**Symptom**: User taps the mic button, records a voice note, stops recording, and sees "Couldn't transcribe — entry will still save without a note". The entry still saves correctly. No transcript is ever produced.
-
-**Root cause**: The bug is in `src/components/ui/MicButton.tsx`, in Nidhi's integration with `expo-audio`. After `recorder.stop()` returns, `recorder.uri` is `null` and the recording-status callback never fires with a valid `status.url`. No audio file is produced → no request is made to Sarvam → no transcript.
-
-**What's NOT the cause**:
-- ❌ Not a Sarvam outage or API issue — Sarvam's `saaras:v4` endpoint works fine when called directly with curl
-- ❌ Not a missing API key — `SARVAM_API_KEY` is read correctly
-- ❌ Not a permissions issue — `RECORD_AUDIO` permission is granted
-- ❌ Not an `expo-audio` SDK bug at the package level
-
-**Impact**: Voice notes are the only affected feature. Everything else (logging, savings, insights, notifications, ads, haptics) works fully.
-
-**Workaround**: Disable voice notes in Settings → "Voice notes" toggle off. The mic button is hidden and the logging flow works perfectly without it.
-
-See the main `README.md` → **Known Issues** section for the full suspected-fix-areas list.
+Voice notes and a RevenueCat startup crash were both fixed on 2026-10-01. For the full diagnosis — three separate bugs in the recording/upload pipeline, plus a numeric-vs-string mismatch in the RevenueCat log level — see **Resolved Issues** in the main `README.md`.
