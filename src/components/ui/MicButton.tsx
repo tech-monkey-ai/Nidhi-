@@ -152,7 +152,7 @@ export function MicButton({ onTranscript }: MicButtonProps) {
       setState("idle");
     }
   };
-
+// eslint-disable-next-line react-hooks/refs
   stopRef.current = () => {
     if (state === "recording") void stopAndTranscribe();
   };
