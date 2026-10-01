@@ -8,9 +8,9 @@ A premium, dignified, multilingual (English / हिन्दी / ಕನ್ನ�
 
 **Built with React Native 0.86.3 + Expo SDK 57 + React 19.2.3. Android-only. EAS dev build verified.**
 
-> **Verification status**: TypeScript `tsc --noEmit` ✓ 0 errors · ESLint ✓ 0 errors 0 warnings · Jest ✓ 173/173 tests · EAS development build ✓ succeeds & installs on Android · GitHub Actions CI ✓ runs on every push/PR
+> **Verification status**: TypeScript `tsc --noEmit` ✓ 0 errors · ESLint ✓ 0 errors 0 warnings · Jest ✓ 169/169 tests · EAS development build ✓ succeeds & installs on Android · GitHub Actions CI ✓ runs on every push/PR
 
-> ⚠️ **Known issue — Sarvam voice-notes flow is broken on our side.** Audio capture starts but `recorder.uri` returns `null` after `recorder.stop()` in `src/components/ui/MicButton.tsx`, so no audio file is sent to Sarvam and no transcript is returned. This is a bug in Nidhi's `expo-audio` integration — the Sarvam API and our API client (`src/lib/voice.ts`) are both correct and complete; only the recording layer is broken. All other features (logging, savings, insights, notifications, ads) are fully functional. See **Known Issues** at the bottom of this README.
+> ✅ **All features working, including voice notes.** Voice transcription via Sarvam AI is fully functional on-device as of 2026-10-01. See **Resolved Issues** at the bottom of this README for the diagnosis and fix.
 
 </div>
 
@@ -32,7 +32,7 @@ Everyday earners deserve an app that respects them — not a stripped-down "budg
 3. **Greeting screen** — ask for the user's name. Personalizes the app ("Good evening, Ramesh").
 4. **Financial picture setup** — approximate income, existing EMIs/loans (amount + duration + description), monthly savings goal, emergency fund target. All manual entry via large numpads — no AI parsing.
 5. **Confirmation screen** — recaps everything with per-field edit options.
-
+6. **Success celebration** — animated checkmark + warm welcome.
 
 ### Dashboard (Home)
 - Time-of-day greeting using the user's name ("Good evening, Ramesh")
@@ -58,13 +58,13 @@ Everyday earners deserve an app that respects them — not a stripped-down "budg
 - Accessing the Emergency Fund requires explicit confirmation ("This is for a real emergency") — soft friction
 - **Optional trusted-contact nudge**: a family member can be added to receive a notification when the Emergency Fund is accessed. Opt-in only, framed as support.
 
-### Voice Notes (optional, fully decoupled) — ⚠️ CURRENTLY BROKEN
+### Voice Notes (optional, fully decoupled)
 - Integrated via **Sarvam AI Speech-to-Text**, model `saaras:v4`, REST API
 - Used only for the optional context note in daily logging and EMI setup
 - The transcript is stored and displayed **as-is**. Never parsed for numbers, amounts, or categories
 - Graceful failure: if transcription fails or there's no connectivity, the entry still saves fine with no note
 - Voice can be disabled entirely in Settings
-- ⚠️ **Current status — broken on our side.** The Sarvam API itself works fine, and our Sarvam client (`src/lib/voice.ts`) is correct. The bug is in our `expo-audio` integration in `src/components/ui/MicButton.tsx`: after calling `recorder.stop()`, `recorder.uri` is `null` and the recording-status callback never fires with a `url`. As a result, no audio file is sent to Sarvam and the user sees a "Couldn't transcribe — entry will still save without a note" message. The entry still saves normally. Logging, savings, insights, notifications, and ads are all unaffected.
+- ✅ **Working.** Tap the mic, speak, tap stop — the note transcribes and attaches to the entry. If Sarvam is unreachable or returns an error, the entry still saves fine with no note.
 
 ### Spending Insights (descriptive, not prescriptive)
 - Weekly/monthly summary screen
@@ -135,7 +135,7 @@ All 15 font files are bundled in `assets/fonts/` — no Google Fonts call at run
 | Routing | Expo Router v5 (file-based) |
 | State | Zustand + AsyncStorage persistence |
 | Native modules | expo-notifications, expo-audio (replaces deprecated expo-av), expo-haptics, expo-splash-screen, expo-status-bar |
-| Voice | Sarvam AI `saaras:v4` (REST, base64 audio upload) — **integration broken on our side, see Known Issues** |
+| Voice | Sarvam AI `saaras:v4` (REST, multipart file upload via `expo-file-system`'s `File`) |
 | Ads (display) | Google Mobile Ads 17.x (AdMob banner + interstitial) |
 | Ads (attribution) | RevenueCat SDK 10.x (ad revenue tracking) |
 | Icons | lucide-react-native v1 |
@@ -296,7 +296,7 @@ eas secret:create --name SARVAM_API_KEY        --value <your-key>
 eas secret:create --name REVENUECAT_ANDROID_KEY --value <your-key>
 ```
 
-> ⚠️ Even with a valid `SARVAM_API_KEY`, voice notes are currently broken on our side (see **Known Issues**). The key is still worth setting up — it works as soon as the `expo-audio` bug is fixed, and can be verified independently via curl (see **Integrations → Sarvam AI** below).
+> Voice notes work end-to-end with a valid `SARVAM_API_KEY` — tap the mic, speak, and the transcript attaches to the entry. See **Integrations → Sarvam AI** below for how the upload works.
 
 ### Build gotchas we already patched (don't undo these)
 
@@ -450,8 +450,9 @@ Once loaded, you'll see the Nidhi language picker screen. 🎉
 - Try tunnel mode: `npm start -- --tunnel` (slower but works through firewalls). Then in the dev build, shake phone → Change Metro URL → enter the tunnel URL.
 
 #### Voice notes don't work
-- ⚠️ **Even with a dev build and a valid `SARVAM_API_KEY`, voice notes currently do NOT work.** The bug is on our side: `recorder.uri` returns `null` after `recorder.stop()` in `src/components/ui/MicButton.tsx`. The Sarvam API itself is fine — our API client (`src/lib/voice.ts`) is fine — only the `expo-audio` recording layer is broken. We're tracking this in the **Known Issues** section. Until fixed, the mic button will show "Couldn't transcribe — entry will still save without a note" and the entry will save normally.
-- All other features (logging, savings, insights, notifications, ads) work fine in the dev build.
+- Make sure `SARVAM_API_KEY` is set (Settings won't show a working mic button without it — see **API keys** below).
+- Check the Metro terminal for `[voice]` log lines while you record. A `200` status with a transcript means it's working. A `4xx`/`5xx` status means a Sarvam-side issue (check your key and credit); no `[voice]` lines at all usually means the mic permission wasn't granted.
+- If the entry saves but no note appears, that's the designed graceful-failure path — the entry is never blocked on transcription.
 
 #### Notifications don't appear
 - Notifications work in the dev build on Android.
@@ -488,7 +489,7 @@ The EAS dev build supports **every feature in the app** — there's no separate 
 | Insights | ✓ |
 | Settings (language, dark mode, notifications toggle) | ✓ |
 | Local notifications (Android) | ✓ |
-| **Voice notes (Sarvam AI)** | ⚠️ Broken on our side — see Known Issues |
+| **Voice notes (Sarvam AI)** | ✓ |
 | **RevenueCat ad attribution** | ✓ (requires REVENUECAT_ANDROID_KEY) |
 | **Google Mobile Ads (banner + interstitial)** | ✓ (uses Google's test ad unit IDs by default) |
 | Haptics | ✓ |
@@ -584,26 +585,20 @@ In the Play Console:
 
 ## Integrations
 
-### Sarvam AI Speech-to-Text — ⚠️ integration broken on our side (Sarvam API itself is fine)
+### Sarvam AI Speech-to-Text
 
 - Endpoint: `POST https://api.sarvam.ai/speech-to-text`
 - Header: `api-subscription-key: <SARVAM_API_KEY>`
 - Model: `saaras:v4`
-- Body: multipart form-data with `model` field + audio file (base64-encoded)
-- Source: audio file from `expo-audio` recording (16kHz mono AAC, optimal for Sarvam)
+- Body: multipart form-data with a `model` field plus the recorded audio file, sent as a real file part (not base64 text) via `expo-file-system`'s `File`, which implements the `Blob` interface Expo SDK 57's bundled `fetch` requires for multipart uploads
+- Source: audio file from `expo-audio` recording
 - **Voice notes are never parsed for numbers, categories, or logic.** They are stored and shown as-is.
 - Voice is fully optional and decoupled — the logging flow works with voice disabled or failing.
-- Robustness: 15s timeout via AbortController, single retry on transient (5xx) errors, 25MB audio size cap.
+- Robustness: 30s timeout via AbortController; on any failure (network, timeout, non-2xx, empty transcript) the function returns `null` and the entry saves without a note — it never blocks logging.
 
-> **Status (2026-10-01): the voice-notes flow is currently broken on our side.**
-> The Sarvam API, our API client (`src/lib/voice.ts`), the AbortController/retry logic, and the
-> multipart upload code are all correct and unit-tested. The bug is purely in the `expo-audio`
-> recording layer in `src/components/ui/MicButton.tsx`: after `recorder.stop()` returns, both
-> `recorder.uri` and the `status.url` from the recording-status callback come back as `null`,
-> meaning no audio file is produced. Without a file, no request is ever made to Sarvam.
-> The user-facing symptom is the "Couldn't transcribe — entry will still save without a note"
-> alert. The entry still saves normally. See the **Known Issues** section at the bottom of this
-> README for the full diagnosis and fix plan.
+> **Status (2026-10-01): working end-to-end.** Recording, upload, and transcription were verified
+> on-device. Getting here took three separate fixes in `src/lib/voice.ts` and
+> `src/components/ui/MicButton.tsx` — see **Resolved Issues** at the bottom of this README.
 
 ### RevenueCat + Google Mobile Ads (Ads only — no paywall, no IAP)
 
@@ -773,8 +768,8 @@ Here's exactly what happens when the app starts:
 After setting up keys, test them:
 
 1. **Sarvam**:
-   - ⚠️ **Voice-notes end-to-end test will currently fail** — even with a valid key and a dev build, the `recorder.uri === null` bug in our `expo-audio` integration prevents any audio from reaching Sarvam. You'll see the "Couldn't transcribe" alert and the entry will save without a note. This is **not** a key problem.
-   - To verify that your Sarvam key itself works (independent of the recording bug), you can call the API directly with any short audio file:
+   - Open the app, log a spending entry, tap the mic, speak a short note, and stop. Check the Metro terminal for `[voice] Sarvam response status: 200` and a transcript — that confirms the key and the full recording → upload → transcription pipeline all work.
+   - To verify your Sarvam key independently of the app, you can call the API directly with any short audio file:
      ```bash
      curl -X POST https://api.sarvam.ai/speech-to-text \
        -H "api-subscription-key: $SARVAM_API_KEY" \
@@ -852,7 +847,7 @@ This repo passes all checks. See `eslint.config.js`, `tsconfig.json`, `jest.conf
 
 ## Tests
 
-The test suite covers all critical pure logic — **173 tests, 10 suites, 100% green**:
+The test suite covers all critical pure logic — **169 tests, 10 suites, 100% green**:
 
 | Suite | What it tests |
 |---|---|
@@ -890,35 +885,29 @@ To add component/integration tests, see `CONTRIBUTING.md` → "Adding tests".
 
 ---
 
-## Known Issues
+## Resolved Issues
 
-### ⚠️ Sarvam voice-notes flow is broken on our side (Sarvam API itself is fine)
+### Sarvam voice-notes flow — fixed 2026-10-01
 
-**Symptom (user-visible)**: When the user taps the mic button, records a voice note, and stops recording, the app shows an alert that says "Couldn't transcribe — entry will still save without a note". The spending entry still saves correctly. No voice transcript is ever produced.
+**Symptom (as originally shipped)**: Tapping the mic, recording, and stopping produced no transcript — the app showed "Couldn't transcribe — entry will still save without a note" every time. The entry still saved correctly; only the transcription step failed.
 
-**Root cause (diagnosed)**: The bug is in `src/components/ui/MicButton.tsx`, in Nidhi's integration with `expo-audio`. After `recorder.stop()` returns:
+**Root cause — three separate bugs, found by working backward through the pipeline**:
 
-- `recorder.uri` is `null`
-- The `status` callback registered via `useAudioRecorder(preset, statusCallback)` is never called with `status.isFinished === true` and a valid `status.url`
+1. **Recorder never prepared.** `src/components/ui/MicButton.tsx` called `recorder.record()` directly. `expo-audio`'s recorder must be prepared first with `await recorder.prepareToRecordAsync()`, or nothing is actually captured and `recorder.uri` stays `null` after `stop()`.
+2. **Legacy file APIs throw in SDK 57.** The original `src/lib/voice.ts` used `FileSystem.getInfoAsync()` / `readAsStringAsync()` from `expo-file-system`. In the installed SDK 57 version of that package these throw rather than returning a result, so the upload path failed before it ever reached Sarvam.
+3. **The upload format itself was wrong, twice.** First attempt: a hand-built multipart body with the audio pasted in as base64 text — Sarvam received text, not audio. Second attempt, after switching to `FormData` with the classic React Native `{ uri, name, type }` file-part object: this threw `Unsupported FormDataPart implementation`, because Expo SDK 57 replaces the global `fetch` with its own implementation (`expo/fetch`), whose multipart encoder only accepts a string, a real `Blob`, or an object exposing `bytes()` — not the `{ uri, name, type }` shape every React Native guide recommends. The fix: wrap the recording in `expo-file-system`'s `File` class, which implements `Blob`, and append that to `FormData` instead.
 
-Because there is no audio file URI, the code path in `stopAndTranscribe()` falls through to the early-return at the `if (!uri)` guard, and `transcribeAudio(uri)` is never called. So no request is ever made to Sarvam. The Sarvam API and our Sarvam client (`src/lib/voice.ts`) are correct and unit-tested in `src/lib/__tests__/voice.test.ts` — they simply never get exercised because the recording layer never hands them a file.
+**Fix locations**: `src/components/ui/MicButton.tsx` (prepare + auto-stop at 28s, since Sarvam's REST endpoint caps audio at 30s) and `src/lib/voice.ts` (File-based upload, no legacy file APIs). Tests in `src/lib/__tests__/voice.test.ts` and `voice-retry.test.ts` were rewritten to match.
 
-**What's NOT the cause**:
-- ❌ Not a Sarvam outage or API issue — Sarvam's `saaras:v4` endpoint works fine when called directly with curl
-- ❌ Not a missing API key — the `SARVAM_API_KEY` env var is read correctly from `Constants.expoConfig.extra.sarvamApiKey`
-- ❌ Not a permissions issue — `RECORD_AUDIO` is in `app.config.ts` permissions and `requestRecordingPermissionsAsync()` returns `granted: true`
-- ❌ Not an `expo-audio` SDK bug at the package level — `expo-audio@~57.0.5` is the correct version for SDK 57
+**Verified**: on-device, with a real recording — Metro log showed `[voice] Sarvam response status: 200` and a correct Hindi transcript.
 
-**Suspected fix areas** (next steps for whoever picks this up):
-1. The recording preset may be at fault — `RecordingPresets.HIGH_QUALITY` may be incompatible with the current `expo-audio` build on the dev APK. Try `RecordingPresets.LOW_QUALITY` or a custom preset that explicitly sets `outputFormat`, `sampleRate: 16000`, `numberOfChannels: 1`, `audioQuality`, and `extension: "aac"`.
-2. `recorder.record()` is called without `await`-ing it — try `await recorder.record()` (it returns a Promise).
-3. The audio mode may be set up incorrectly — `setAudioModeAsync({ allowsRecording: true })` is called, but the recording may need to also set `shouldPlay: false` and `interruptionMode: 'mixWithOthers'`.
-4. The status callback may be registered too late. Try moving the `useAudioRecorder` call earlier or using `recorder.uri` immediately after `await recorder.stop()` without the polling loop.
-5. As a diagnostic step, log `recorder.status` and `recorder.isRecording` immediately before and after `recorder.stop()` — if `isRecording` is `false` at the time of `stop()`, the recording never started successfully and `record()` silently failed.
+### RevenueCat crash on launch — fixed 2026-10-01
 
-**Impact**: Voice notes are the only affected feature. Logging, savings, insights, notifications, ads, haptics, and all onboarding flows are unaffected and fully functional.
+**Symptom**: `Exception in HostFunction: Expected argument 0 of method "setLogLevel" to be a string, but got a number`, thrown on every app launch from `initRevenueCat()`.
 
-**Workaround for end users**: Disable the voice-notes feature in Settings → "Voice notes" toggle off. The mic button will be hidden and the logging flow works perfectly without it.
+**Root cause**: `src/lib/revenuecat-types.ts` defined its own `LOG_LEVEL` constant as numeric (`INFO: 2`, etc.), but the real `react-native-purchases` SDK's `setLogLevel` expects the native SDK's string-valued enum (`LOG_LEVEL.INFO === "INFO"`). The existing unit test for this compared a hardcoded object to itself rather than importing the real export, so it couldn't catch the mismatch.
+
+**Fix**: `LOG_LEVEL` is now string-valued, matching the native SDK. The test now imports and checks the real export.
 
 ---
 
@@ -938,9 +927,9 @@ These are deliberate product decisions, not technical limitations.
 
 ## License
 
-Proprietary. © Nandan Bhat. All rights reserved.
+Proprietary. © Nidhi. All rights reserved.
 
-For licensing inquiries: `nandangbsn@gmail.com` 
+For licensing inquiries: `hello@nidhi.app` (replace with your real address).
 
 ---
 
@@ -961,5 +950,3 @@ For licensing inquiries: `nandangbsn@gmail.com`
 **Nidhi** — *Your money, kept close.*
 
 Built with care for everyday earners.
-
-</div>
