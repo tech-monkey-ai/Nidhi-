@@ -50,7 +50,7 @@ export interface PurchasesAdTracker {
 
 export interface PurchasesAdsModule {
   configure(configuration: { apiKey: string }): void;
-  setLogLevel(level: number): void;
+  setLogLevel(level: string): void;
   readonly adTracker?: PurchasesAdTracker;
   shutdown?(): Promise<void>;
 }
@@ -94,9 +94,9 @@ export const PURCHASES: PurchasesAdsModule = {
 };
 
 export const LOG_LEVEL = {
-  DEBUG: 0,
-  VERBOSE: 1,
-  INFO: 2,
-  WARN: 3,
-  ERROR: 4,
+  DEBUG: "DEBUG",
+  VERBOSE: "VERBOSE",
+  INFO: "INFO",
+  WARN: "WARN",
+  ERROR: "ERROR",
 } as const;

@@ -8,6 +8,7 @@
 //   5. The lazy module loading pattern is safe
 
 import { initAds, isAdsEnabled, showInterstitialAfterLog } from "@/lib/revenuecat";
+import { LOG_LEVEL } from "@/lib/revenuecat-types";
 import Constants from "expo-constants";
 
 describe("revenuecat + google mobile ads integration", () => {
@@ -97,14 +98,17 @@ describe("revenuecat + google mobile ads integration", () => {
       expect(config.apiKey).toBe("test-key");
     });
 
-    it("LOG_LEVEL values are 0-4", () => {
-      // Verify the LOG_LEVEL constants match what we use
-      expect({ DEBUG: 0, VERBOSE: 1, INFO: 2, WARN: 3, ERROR: 4 }).toEqual({
-        DEBUG: 0,
-        VERBOSE: 1,
-        INFO: 2,
-        WARN: 3,
-        ERROR: 4,
+    it("LOG_LEVEL values match RevenueCat's string-valued enum", () => {
+      // The native SDK's LOG_LEVEL enum is string-valued (LOG_LEVEL.INFO = "INFO"),
+      // not numeric. Passing a number here throws "Expected argument 0 of
+      // method setLogLevel to be a string" at runtime. This test imports the
+      // real export so a regression back to numbers fails the suite.
+      expect(LOG_LEVEL).toEqual({
+        DEBUG: "DEBUG",
+        VERBOSE: "VERBOSE",
+        INFO: "INFO",
+        WARN: "WARN",
+        ERROR: "ERROR",
       });
     });
   });

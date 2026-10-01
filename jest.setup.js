@@ -97,14 +97,28 @@ jest.mock("react-native-purchases", () => ({
       trackAdFailedToLoad: jest.fn().mockResolvedValue(undefined),
     },
   },
-  LOG_LEVEL: { DEBUG: 0, VERBOSE: 1, INFO: 2, WARN: 3, ERROR: 4 },
+  LOG_LEVEL: { DEBUG: "DEBUG", VERBOSE: "VERBOSE", INFO: "INFO", WARN: "WARN", ERROR: "ERROR" },
 }));
 
-jest.mock("expo-file-system", () => ({
-  getInfoAsync: jest.fn().mockResolvedValue({ exists: true, size: 1000 }),
-  readAsStringAsync: jest.fn().mockResolvedValue("base64-data"),
-  EncodingType: { Base64: "base64" },
-}));
+jest.mock("expo-file-system", () => {
+  // jsdom's real FormData checks `instanceof Blob`, so the test double has
+  // to actually extend Blob (unlike the native runtime, which only needs a
+  // bytes()-shaped object). Content is irrelevant to these tests.
+  class MockFile extends Blob {
+    uri;
+    exists = true;
+    constructor(uri) {
+      super(["mock-audio-bytes"]);
+      this.uri = uri;
+    }
+  }
+  return {
+    getInfoAsync: jest.fn().mockResolvedValue({ exists: true, size: 1000 }),
+    readAsStringAsync: jest.fn().mockResolvedValue("base64-data"),
+    EncodingType: { Base64: "base64" },
+    File: MockFile,
+  };
+});
 
 jest.mock("expo-constants", () => ({
   expoConfig: {

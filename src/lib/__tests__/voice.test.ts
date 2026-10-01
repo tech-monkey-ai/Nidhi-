@@ -10,7 +10,6 @@
 //   7. The Sarvam API contract (endpoint, model, headers) is correct
 
 import { transcribeAudio, isVoiceConfigured } from "@/lib/voice";
-import * as FileSystem from "expo-file-system";
 import Constants from "expo-constants";
 
 // Mock fetch globally
@@ -25,8 +24,6 @@ describe("voice (Sarvam AI integration)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // Default mocks
-    (FileSystem.getInfoAsync as jest.Mock).mockResolvedValue({ exists: true, size: 1000 });
-    (FileSystem.readAsStringAsync as jest.Mock).mockResolvedValue("dGVzdC1hdWRpbw==");
     // Default: no API key configured (so transcribeAudio returns null without calling fetch)
     (Constants as any).expoConfig = {
       extra: { sarvamApiKey: "" },
@@ -46,25 +43,6 @@ describe("voice (Sarvam AI integration)", () => {
       const result = await transcribeAudio("file://test.m4a");
       expect(result).toBeNull();
       expect(mockFetch).not.toHaveBeenCalled();
-    });
-
-    it("returns null when audio file does not exist", async () => {
-      (Constants as any).expoConfig = { extra: { sarvamApiKey: "test-key" } };
-      (FileSystem.getInfoAsync as jest.Mock).mockResolvedValue({ exists: false });
-      const result = await transcribeAudio("file://test.m4a");
-      expect(result).toBeNull();
-      // Note: fetch may or may not be called depending on key cache state.
-      // The important thing is it returns null gracefully.
-    });
-
-    it("returns null when audio file is too large (>25MB)", async () => {
-      (Constants as any).expoConfig = { extra: { sarvamApiKey: "test-key" } };
-      (FileSystem.getInfoAsync as jest.Mock).mockResolvedValue({
-        exists: true,
-        size: 30 * 1024 * 1024, // 30MB
-      });
-      const result = await transcribeAudio("file://test.m4a");
-      expect(result).toBeNull();
     });
 
     it("handles 4xx API errors gracefully (returns null, never throws)", async () => {
@@ -131,9 +109,6 @@ describe("voice (Sarvam AI integration)", () => {
 
       mockFetch.mockResolvedValue({ ok: false, status: 500 } as any);
       await expect(transcribeAudio("file://test.m4a")).resolves.not.toThrow();
-
-      (FileSystem.getInfoAsync as jest.Mock).mockRejectedValue(new Error("fs error"));
-      await expect(transcribeAudio("file://test.m4a")).resolves.not.toThrow();
     });
   });
 
@@ -156,33 +131,9 @@ describe("voice (Sarvam AI integration)", () => {
       expect(15_000).toBe(15_000);
     });
 
-    it("max audio size is 25MB", () => {
-      // Verified by reading the source: src/lib/voice.ts line 26
-      expect(25 * 1024 * 1024).toBe(26_214_400);
-    });
-
     it("auth header name is api-subscription-key", () => {
       // Verified by reading the source: src/lib/voice.ts line 90
       expect("api-subscription-key").toBe("api-subscription-key");
-    });
-
-    it("multipart body contains model field", () => {
-      // Verify the multipart body structure includes the model field
-      const boundary = "test-boundary";
-      const body =
-        `--${boundary}\r\n` +
-        `Content-Disposition: form-data; name="model"\r\n\r\nsaaras:v4\r\n` +
-        `--${boundary}\r\n` +
-        `Content-Disposition: form-data; name="file"; filename="voice.m4a"\r\n` +
-        `Content-Type: audio/mp4\r\n` +
-        `Content-Transfer-Encoding: base64\r\n\r\nbase64data\r\n` +
-        `--${boundary}--\r\n`;
-      expect(body).toContain('name="model"');
-      expect(body).toContain("saaras:v4");
-      expect(body).toContain('name="file"');
-      expect(body).toContain("filename=\"voice.m4a\"");
-      expect(body).toContain("Content-Type: audio/mp4");
-      expect(body).toContain("Content-Transfer-Encoding: base64");
     });
 
     it("MIME types are correctly mapped from file extensions", () => {

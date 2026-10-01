@@ -1,6 +1,6 @@
 // NIDHI — MicButton (final — reliable URI capture via status listener)
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   TouchableOpacity,
   View,
@@ -36,6 +36,13 @@ export function MicButton({ onTranscript }: MicButtonProps) {
 
   // Store the recording URI when it becomes available
   const recordedUriRef = useRef<string | null>(null);
+  // Sarvam's REST endpoint accepts at most 30 s of audio, so auto-stop at 28 s.
+  const MAX_RECORD_MS = 28_000;
+  const autoStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopRef = useRef<() => void>(() => {});
+  useEffect(() => () => {
+    if (autoStopRef.current) clearTimeout(autoStopRef.current);
+  }, []);
 
   const recorder = useAudioRecorder(
     RecordingPresets.HIGH_QUALITY,
@@ -75,8 +82,13 @@ export function MicButton({ onTranscript }: MicButtonProps) {
         playsInSilentMode: true,
         allowsRecording: true,
       });
+      // expo-audio requires the recorder to be prepared before record();
+      // skipping this leaves recorder.uri null and nothing gets recorded.
+      await recorder.prepareToRecordAsync();
       recorder.record();
       setState("recording");
+      if (autoStopRef.current) clearTimeout(autoStopRef.current);
+      autoStopRef.current = setTimeout(() => stopRef.current(), MAX_RECORD_MS);
     } catch (e) {
       console.warn("[voice] start failed", e);
       Alert.alert(t("appName"), t("voice.permissionDenied"));
@@ -85,24 +97,20 @@ export function MicButton({ onTranscript }: MicButtonProps) {
 
   const stopAndTranscribe = async () => {
     try {
+      if (autoStopRef.current) {
+        clearTimeout(autoStopRef.current);
+        autoStopRef.current = null;
+      }
       setState("transcribing");
 
-      // Stop recording
+      // Stop recording; after this, recorder.uri holds the finished file.
       await recorder.stop();
 
-      // Wait for the status callback to fire with the URL
-      // Try multiple times with increasing delays
-      let uri = recordedUriRef.current;
+      let uri: string | null = recorder.uri ?? recordedUriRef.current;
+      // Fallback: the status listener can deliver the URL slightly later.
       for (let i = 0; i < 10 && !uri; i++) {
         await new Promise((r) => setTimeout(r, 200));
-        uri = recordedUriRef.current;
-        if (uri) break;
-      }
-
-      // Also check recorder.uri as fallback
-      if (!uri) {
-        uri = recorder.uri;
-        console.log("[voice] recorder.uri after wait:", uri);
+        uri = recorder.uri ?? recordedUriRef.current;
       }
 
       if (!uri) {
@@ -143,6 +151,10 @@ export function MicButton({ onTranscript }: MicButtonProps) {
       } catch {}
       setState("idle");
     }
+  };
+
+  stopRef.current = () => {
+    if (state === "recording") void stopAndTranscribe();
   };
 
   const onPress = () => {
