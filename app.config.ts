@@ -67,7 +67,7 @@ export default ({ config }: ConfigContext): NidhiExpoConfig => ({
   },
   extra: {
     eas: {
-      projectId: "b1bf6712-3100-4490-b0e8-dbccc6918f75",
+      projectId: "REPLACE WITH YOUR EAS PROJECT KEY",
     },
     sarvamApiKey: process.env.SARVAM_API_KEY ?? "",
     revenueCatAndroidApiKey: process.env.REVENUECAT_ANDROID_KEY ?? "REPLACE_WITH_YOUR_REVENUECAT_ANDROID_SDK_KEY",
