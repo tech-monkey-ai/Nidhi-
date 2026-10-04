@@ -10,9 +10,24 @@ A premium, dignified, multilingual (English / हिन्दी / ಕನ್ನ�
 
 > **Verification status**: TypeScript `tsc --noEmit` ✓ 0 errors · ESLint ✓ 0 errors 0 warnings · Jest ✓ 169/169 tests · EAS development build ✓ succeeds & installs on Android · GitHub Actions CI ✓ runs on every push/PR
 
-> ✅ **All features working, including voice notes.** Voice transcription via Sarvam AI is fully functional on-device as of 2026-10-01. See **Resolved Issues** at the bottom of this README for the diagnosis and fix.
+> ✅ **All features working, including voice notes.** Voice transcription via Sarvam AI is fully functional on-device as of 2026-10-01. See **Resolved Issues** near the bottom of this README for the diagnosis and fix.
 
 </div>
+
+---
+
+## TL;DR for judges / testers
+
+```
+npm install --legacy-peer-deps
+eas login
+eas init                                        # see "Before your first build" below — required once
+eas build -p android --profile development
+# sideload the APK, then:
+npm start
+```
+
+All features, including voice, are working. The one setup step most people miss is `eas init` — see **Before your first build** below.
 
 ---
 
@@ -81,7 +96,7 @@ Everyday earners deserve an app that respects them — not a stripped-down "budg
 5. **Emergency Fund milestone** — positive, celebratory notification when target reached
 
 ### Monetization — RevenueCat Ads (no subscription, no IAP)
-- RevenueCat SDK configured for **Ads only** — no paywall, no subscription tier, no in-app purchases
+- RevenueCat SDK configured for **Ads only** — no paywall, no subscription tier, no in-app purchases. This is a deliberate choice: Nidhi's users already work hard for their money, and the app should never ask them to pay for the tool meant to help them keep more of it.
 - Ad placements respect the audience:
   - **Banner** on the Dashboard (always-on, visually distinct)
   - **Light interstitial** after completing a daily log (never before — never interrupts the core task)
@@ -216,7 +231,8 @@ nidhi-mobile/
     │   ├── validation.ts            Input sanitization & validation
     │   ├── notifications.ts         expo-notifications scheduling
     │   ├── voice.ts                 Sarvam AI client
-    │   └── revenuecat.ts            RC Ads SDK init + helpers
+    │   ├── revenuecat.ts            RC Ads SDK init + helpers
+    │   └── revenuecat-types.ts      RC type definitions + LOG_LEVEL constants
     ├── store/
     │   └── appStore.ts              Zustand store (state + actions + persistence)
     └── strings/
@@ -227,359 +243,194 @@ nidhi-mobile/
 
 ---
 
-## Quick start (EAS dev build — the only way to test Nidhi)
+## Run it yourself (EAS dev build — the only supported test path)
 
 Nidhi is **Android-only** and uses native modules (`expo-audio`, `react-native-purchases`, `react-native-google-mobile-ads`) that are not present in Expo Go. **Use the EAS dev build for all testing** — Expo Go is not supported for this project.
 
 ### Prerequisites
-- **Node.js 20+** (Node 22 LTS recommended; Node 18 also works)
-- **An Expo account** (free, sign up at https://expo.dev/signup)
+- **Node.js 20+** (Node 22 LTS recommended; Node 18 also works) — download from https://nodejs.org/, LTS version. Verify with `node --version` and `npm --version`.
+- **An Expo account** (free, sign up at https://expo.dev/signup — the free tier includes 15 Android builds/month, plenty for development)
 - **An Android phone** with USB debugging enabled, on the same Wi-Fi network as your computer
-- **An Expo EAS subscription** — the free tier includes 15 Android builds/month, which is plenty for development
 
 > No Android Studio, no Xcode, no JDK, no Gradle install on your machine. EAS builds in the cloud and ships you a ready-to-sideload APK.
 
-### Step 1 — Install dependencies
+### Step 1 — Download and install dependencies
+
+Unzip the project (or clone the repo), open a terminal in that folder, then:
 
 ```bash
 cd nidhi-mobile
 npm install --legacy-peer-deps
 ```
 
-The `--legacy-peer-deps` flag is required for Expo SDK 57. A `postinstall` script auto-runs and patches 4 known SDK 57 issues (TS type augmentation, missing polyfills, `ErrorUtils` guard, `setUpErrorHandling` guard). Do not skip it.
+Takes 1–3 minutes. The `--legacy-peer-deps` flag is required for Expo SDK 57 (some peer-dep conflicts npm resolves too aggressively by default). A `postinstall` script auto-runs and patches 4 known SDK 57 issues (TS type augmentation, missing polyfills, `ErrorUtils` guard, `setUpErrorHandling` guard). Do not skip it.
 
 ### Step 2 — Install EAS CLI and log in
 
 ```bash
 npm i -g eas-cli
 eas login
+eas whoami    # verify you're logged in
 ```
 
-### Step 3 — Build the dev APK in the cloud
+### Step 3 — Before your first build: link the project
+
+This repo's `app.config.ts` ships with a placeholder instead of a real EAS project ID, since that ID is tied to a specific Expo account and shouldn't be committed as someone else's. **You need to generate your own before building:**
+
+```bash
+eas init
+```
+
+This creates a free project under *your* Expo account and prints a project ID (a UUID, like `b1bf6712-3100-4490-b0e8-dbccc6918f75`). Because this repo uses `app.config.ts` (a TypeScript file) rather than `app.json`, the EAS CLI can't write that ID in for you automatically — copy the UUID it prints and paste it in manually:
+
+```ts
+// app.config.ts
+extra: {
+  eas: {
+    projectId: "paste-your-new-uuid-here",
+  },
+  ...
+```
+
+Skipping this step is the single most common failure point — `eas build` will error with something like `Invalid UUID appId` if the placeholder is still in place.
+
+### Step 4 — Build the dev APK in the cloud
 
 ```bash
 eas build -p android --profile development
 ```
 
-This produces a development APK (with the Expo dev menu, hot-reload support, and all native modules compiled in). Takes 10–15 minutes the first time, ~5 minutes on subsequent builds (EAS caches the gradle/NDK layers).
+This produces a development APK (with the Expo dev menu, hot-reload support, and all native modules compiled in). Takes 10–15 minutes the first time, ~5 minutes on subsequent builds (EAS caches the gradle/NDK layers). When it finishes, EAS prints a download link — click it to download the `.apk`.
 
-When the build finishes, EAS gives you a download link. Download the `.apk` to your computer.
+> The build profile `development` is defined in `eas.json`: `buildType: apk` + `developmentClient: true` + `distribution: internal`. Don't change these.
 
-### Step 4 — Sideload the APK onto your phone
+### Step 5 — Sideload the APK onto your phone
 
-1. Transfer the `.apk` to your Android phone (USB, Google Drive, Send Anywhere, whatever).
-2. On your phone, open the `.apk` file.
-3. If prompted, allow "install from unknown sources" for your file manager / browser.
-4. Open the **Nidhi** app. You'll see a screen that says "Loading from Metro" — this is the dev build waiting for the JS bundle.
+1. Transfer the `.apk` to your phone (USB, Google Drive, Send Anywhere, whatever).
+2. On your phone, open the `.apk` file (use a file manager if needed).
+3. If prompted, allow **"Install unknown apps"** for your file manager / browser (one-time permission).
+4. Tap **Install**, then open **Nidhi**. You'll see "Waiting for Metro" — that's the dev build waiting for the JS bundle from your computer.
 
-### Step 5 — Start the Metro dev server on your computer
+### Step 6 — Connect phone + computer to the same Wi-Fi
 
-```bash
-npm start
-```
+Critical — the dev build talks to Metro over the local network, not the internet. If your phone is on mobile data and your computer is on Wi-Fi (or vice versa), it won't connect.
 
-The dev build on your phone will auto-discover the Metro server on your local network and load the JS bundle. From this point on, every code change hot-reloads into the dev build instantly — no rebuild needed.
-
-> The `npm start` script sets `EXPO_OFFLINE=1` automatically (via `cross-env`). This skips Expo's online version-check step which crashes on Node 20+ due to a known `@expo/cli` bug (`Body is unusable: Body has already been read`). If you ever need the online check, run `npm run start:online` instead.
-
-### Step 6 — (Optional) Set up secrets for voice + ads
-
-Voice notes (Sarvam AI) and ads (RevenueCat + Google Mobile Ads) work without keys — they silently no-op. To enable them:
-
-```bash
-# Local dev (read by EAS at build time):
-cp .env.example .env
-# Edit .env with your SARVAM_API_KEY and REVENUECAT_ANDROID_KEY
-
-# Or, for shared/production EAS builds:
-eas secret:create --name SARVAM_API_KEY        --value <your-key>
-eas secret:create --name REVENUECAT_ANDROID_KEY --value <your-key>
-```
-
-> Voice notes work end-to-end with a valid `SARVAM_API_KEY` — tap the mic, speak, and the transcript attaches to the entry. See **Integrations → Sarvam AI** below for how the upload works.
-
-### Build gotchas we already patched (don't undo these)
-
-- `.npmrc` has `legacy-peer-deps=true`
-- `babel.config.js` uses `babel-preset-expo` only (no nativewind babel plugin, despite nativewind being in devDeps for its Tailwind types)
-- `app.config.ts` sets `compileSdkVersion: 36`, `targetSdkVersion: 36`, `minSdkVersion: 24`, and uses `./plugins/with-gradle-version` to bump the Gradle JVM heap to 4 GB
-- `scripts/postinstall-patch.js` auto-applies 4 patches on every `npm install`
-- Pinned to **Gradle 9.3.1 + Kotlin 2.1.20** — do NOT upgrade to Gradle 9.4.1, it causes a Kotlin version mismatch crash at build time
-
----
-
-## Run on your phone — full step-by-step guide (EAS dev build)
-
-This is the **only supported way** to test Nidhi. The app uses native modules that aren't present in Expo Go, so Expo Go is not an option.
-
-### Step 1: Install Node.js on your computer
-
-1. Go to https://nodejs.org/
-2. Download the **LTS version** (20.x or 22.x).
-3. Run the installer. Accept all defaults.
-4. Verify installation by opening a terminal (Command Prompt / PowerShell / Terminal) and typing:
-   ```bash
-   node --version
-   npm --version
-   ```
-   You should see version numbers, not errors.
-
-### Step 2: Download the Nidhi source code
-
-1. Download the `nidhi-mobile.zip` file.
-2. Unzip it anywhere on your computer (e.g., `C:\Users\yourname\nidhi-mobile` on Windows, or `~/nidhi-mobile` on Mac/Linux).
-3. Open a terminal in that folder:
-   - **Windows**: Open File Explorer → navigate to the folder → click the address bar → type `powershell` → press Enter
-   - **Mac/Linux**: Open Terminal → `cd ~/path/to/nidhi-mobile`
-
-### Step 3: Install dependencies
-
-In your terminal, run:
-
-```bash
-npm install --legacy-peer-deps
-```
-
-This takes 1–3 minutes the first time. A `postinstall` script auto-runs to patch 4 known SDK 57 issues.
-
-> The `--legacy-peer-deps` flag is required because Expo SDK 57 has some peer-dep conflicts that npm resolves too aggressively by default.
-
-### Step 4: Sign up for Expo and install EAS CLI
-
-1. Sign up for a free Expo account at https://expo.dev/signup (the free tier includes 15 Android builds/month — plenty for development).
-2. Install EAS CLI globally:
-   ```bash
-   npm i -g eas-cli
-   eas login
-   ```
-3. Verify you're logged in:
-   ```bash
-   eas whoami
-   ```
-
-### Step 5: Build the dev APK in the cloud
-
-```bash
-eas build -p android --profile development
-```
-
-This runs in Expo's cloud build pipeline. **Takes 10–15 minutes the first time** (gradle downloads + NDK + native compilation), ~5 minutes on subsequent builds (EAS caches the gradle/NDK layers).
-
-When the build finishes, EAS prints a download link in your terminal. Click it to download the `.apk` file to your computer.
-
-> **The build profile `development` is defined in `eas.json`**. It produces an APK (not an AAB), configured for internal distribution, with `developmentClient: true` (so it has the Expo dev menu and supports hot-reload from Metro).
-
-### Step 6: Sideload the APK onto your Android phone
-
-1. Transfer the downloaded `.apk` file to your Android phone (USB cable, Google Drive, Send Anywhere — whatever you prefer).
-2. On your phone, open the `.apk` file (use a file manager like Files or Solid Explorer if needed).
-3. If prompted, allow **"Install unknown apps"** for your file manager / browser. This is a one-time permission per app.
-4. Tap **Install**.
-5. Open the **Nidhi** app from your app drawer. You'll see a screen that says "Downloading JavaScript bundle" or "Waiting for Metro" — this is the dev build waiting for the JS bundle from your computer.
-
-### Step 7: Connect your phone and computer to the same Wi-Fi
-
-This is **critical**. The dev build talks to the Metro dev server on your computer over the local network. If your phone is on mobile data and your computer is on Wi-Fi (or vice versa), hot-reload won't work.
-
-- Connect both devices to the same Wi-Fi network (e.g., your home Wi-Fi).
-- If you're on a corporate / campus network that blocks local traffic, see the **Troubleshooting** section below.
-
-### Step 8: Start the Metro dev server
-
-In your terminal (still in the `nidhi-mobile` folder), run:
+### Step 7 — Start the Metro dev server
 
 ```bash
 npm start
 ```
 
-You'll see something like this in your terminal:
+The dev build on your phone auto-discovers Metro and loads the JS bundle (10–30 seconds the first time). From here on, every JS/TS code change hot-reloads instantly — no rebuild needed.
 
-```
-› Metro waiting on exp://192.168.1.42:8081
-› Scan QR with Expo Go to open the app
-› Or press a to open the Android emulator (not available in this build)
+> `npm start` sets `EXPO_OFFLINE=1` automatically (via `cross-env`), which skips a known `@expo/cli` 0.22.x bug on Node 20+ (`Body is unusable: Body has already been read`). If you ran `npx expo start` directly instead of `npm start`, that's the likely cause of that error.
 
-  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
-  █ ▄▄▄▄▄ █ ▀▀▀█ ▄▄▄▄▄ █
-  █ █   █ █▀▀ ▄█   █ █
-  █ █▄▄▄█ █▀▄ █▄▄▄█ █
-  █▄▄▄▄▄▄▄█ █ ▄█▄▄▄▄▄▄▄█
-  █  ▄▀▄▄▄ ▀▄▀▀▀▀ ▄ ▄▄▀█
-  █ █▀  ▀▄▄ ▀ ▄▀▀ ▀▄ ▀ █
-  █ █ █ ▄ ▀▀▄▀█▄▄▄▀ ▄█▀ █
-  █▄ █▄█▄▄▄█▄█▄▄▄█▄███▄▄█
-  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
-  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+### Step 8 — Use the app
 
-  › Press ? to show help
-```
-
-Keep this terminal open — the dev server runs as long as this terminal is open. The dev build on your phone auto-discovers the Metro server (via the `exp://` URL) and loads the JS bundle.
-
-### Step 9: Wait for the bundle to load
-
-The first load takes 10–30 seconds while Metro bundles the JavaScript. You'll see a progress bar on your phone. Subsequent loads are nearly instant (Metro caches the bundle).
-
-Once loaded, you'll see the Nidhi language picker screen. 🎉
-
-### Step 10: Use the app
-
-- Pick a language (English / हिन्दी / ಕನ್ನಡ)
-- Tap through the welcome carousel
-- Enter your name
-- Enter your financial picture (income, savings goal, etc.)
-- You're in! Tap the bottom-nav tabs to explore.
+Pick a language (English / हिन्दी / ಕನ್ನಡ), complete onboarding, and explore the 5 tabs.
 
 > Your data is stored on your phone only — nothing is sent to any server. Uninstalling Nidhi wipes the data.
 
-### Troubleshooting
+### (Optional) Step 9 — Set up secrets for voice + ads
 
-#### Dev build can't connect to Metro ("Waiting for Metro" forever)
-- **Most common cause**: your phone and computer are on different networks. Verify both are on the same Wi-Fi.
-- In the dev build, shake your phone to open the dev menu → tap "Change Metro URL" → enter the URL shown in your terminal (something like `exp://192.168.1.42:8081`).
-- Restart the dev server: press `Ctrl+C` in your terminal, then `npm start` again.
-
-#### `TypeError: Body is unusable: Body has already been read` at startup
-- This is a known bug in `@expo/cli` 0.22.x with Node 20+. The `npm start` script in this repo already sets `EXPO_OFFLINE=1` via `cross-env` to skip the buggy code path. If you ran `npx expo start` directly, use `npm start` instead.
-
-#### Dev build shows "Network error" after loading
-- Your phone can't reach your computer. Check that:
-  - Both are on the same Wi-Fi network (not a guest network)
-  - Your computer's firewall isn't blocking port 8081
-  - On Windows: allow Node.js through the firewall when prompted
-- Try tunnel mode: `npm start -- --tunnel` (slower but works through firewalls). Then in the dev build, shake phone → Change Metro URL → enter the tunnel URL.
-
-#### Voice notes don't work
-- Make sure `SARVAM_API_KEY` is set (Settings won't show a working mic button without it — see **API keys** below).
-- Check the Metro terminal for `[voice]` log lines while you record. A `200` status with a transcript means it's working. A `4xx`/`5xx` status means a Sarvam-side issue (check your key and credit); no `[voice]` lines at all usually means the mic permission wasn't granted.
-- If the entry saves but no note appears, that's the designed graceful-failure path — the entry is never blocked on transcription.
-
-#### Notifications don't appear
-- Notifications work in the dev build on Android.
-- Check Settings → Notifications → toggle them on.
-- Make sure your phone's system settings allow notifications for Nidhi (Settings → Apps → Nidhi → Notifications → Allow).
-
-#### "Unable to resolve module" error in terminal
-- Run `npm start -- --clear` to clear the Metro cache.
-- If that doesn't help, delete `node_modules/.cache` and restart.
-
-#### App crashes on launch
-- Check the terminal for errors. Most common cause is a missing font or asset.
-- Run `npm run ts:check` to verify there are no TypeScript errors.
-- Run `npm run lint` to verify there are no ESLint errors.
-
-#### `eas build` fails
-- Make sure you're logged in (`eas whoami`).
-- Check the build logs in the Expo dashboard (link in your terminal).
-- The build profile `development` in `eas.json` uses `buildType: apk` + `developmentClient: true` + `distribution: internal` — don't change these.
-- If the build fails with a Kotlin/Gradle error, verify the pinned versions: **Gradle 9.3.1 + Kotlin 2.1.20**. Don't upgrade to Gradle 9.4.1 (causes a Kotlin version mismatch crash).
-
-#### `npm install` fails with peer dependency errors
-- Use `npm install --legacy-peer-deps` (required for Expo SDK 57). A `.npmrc` with `legacy-peer-deps=true` is already in the repo, so a plain `npm install` should also work.
-
-### Feature support (EAS dev build)
-
-The EAS dev build supports **every feature in the app** — there's no separate "Expo Go" feature set:
-
-| Feature | EAS dev build |
-|---|---|
-| All UI / navigation | ✓ |
-| Logging spending | ✓ |
-| Savings / Emergency Fund | ✓ |
-| Insights | ✓ |
-| Settings (language, dark mode, notifications toggle) | ✓ |
-| Local notifications (Android) | ✓ |
-| **Voice notes (Sarvam AI)** | ✓ |
-| **RevenueCat ad attribution** | ✓ (requires REVENUECAT_ANDROID_KEY) |
-| **Google Mobile Ads (banner + interstitial)** | ✓ (uses Google's test ad unit IDs by default) |
-| Haptics | ✓ |
-
-### Rebuilding the dev build
-
-You only need to rebuild when you change something that requires native compilation:
-- Any file under `plugins/`
-- `app.config.ts` (permissions, plugins, SDK versions, ad unit IDs)
-- A new native dependency (a package that requires its own native module)
-
-For pure JS/TS changes (anything under `src/`, `app/`, `App.tsx`, `src/strings/`), just keep `npm start` running — Metro hot-reloads instantly, no rebuild needed.
-
-```bash
-# Rebuild after native changes
-eas build -p android --profile development
-
-# Then re-sideload the new APK (uninstall the old one first if signing differs)
-```
+Voice notes (Sarvam AI) and ads (RevenueCat + Google Mobile Ads) work without keys — they silently no-op. See **API keys** below for the full guide.
 
 ---
 
-## Other build profiles (for distribution)
+## API keys — where to put them and how they work
 
-The EAS dev build (above) is for development. When you're ready to share the app with non-developers or ship to the Play Store, use these profiles:
+Nidhi uses two external services: **Sarvam AI** (optional voice transcription) and **RevenueCat** (ads). Both require API keys to actually exercise those features — **the app works 100% without either.**
 
-### Preview build (release APK for QA / sharing)
+### What keys do I need?
 
-Use this when you want a standalone APK to share with testers, without Metro dev server dependency.
+| Service | Key name | Required for | Get one at |
+|---|---|---|---|
+| Sarvam AI | `SARVAM_API_KEY` | Voice notes (optional — app works fully without) | https://sarvam.ai/ |
+| RevenueCat (Android) | `REVENUECAT_ANDROID_KEY` | Ad revenue attribution (optional — ads work without) | https://app.revenuecat.com/ |
+| RevenueCat (iOS) | `REVENUECAT_IOS_KEY` | Ad attribution on iOS (only if you build for iOS) | https://app.revenuecat.com/ |
+| Google Ads App ID | `GOOGLE_ADS_ANDROID_APP_ID` | Banner + interstitial display (defaults to Google's test ID) | https://apps.admob.com/ |
+| Google Ads Banner Unit ID | `GOOGLE_ADS_BANNER_UNIT_ID` | Banner ad unit (defaults to Google's test ID) | https://apps.admob.com/ |
+| Google Ads Interstitial Unit ID | `GOOGLE_ADS_INTERSTITIAL_UNIT_ID` | Interstitial ad unit (defaults to Google's test ID) | https://apps.admob.com/ |
 
-```bash
-eas build -p android --profile preview
-```
+> **For development, leave the Google Ads keys blank** — the app uses Google's official **test ad unit IDs** by default, which protects you from being flagged for invalid traffic on your real ad units. Only set real IDs when publishing to the Play Store.
 
-This produces a **release-mode APK** (no dev menu, no Metro dependency — runs standalone with the JS bundle baked in). Sideload it the same way as the dev build. Takes 15–20 minutes.
+### Where do I put the keys? (3 options)
 
-### Production build (signed AAB for Play Store)
-
-```bash
-eas build -p android --profile production
-```
-
-Produces a signed `.aab` ready for Play Console upload. See the "Build for Google Play Store" section below for the full walkthrough.
-
----
-
-## Build for Google Play Store
-
-### 1. Configure EAS
+**Option A — Local `.env` (fastest, for your own phone via EAS dev build)**
 
 ```bash
-eas login
-eas build:configure        # creates eas.json (already present in this repo)
+cp .env.example .env
 ```
 
-Set `extra.eas.projectId` in `app.config.ts` to the ID returned.
+Open `.env` and fill in your keys:
+```env
+SARVAM_API_KEY=your-sarvam-key-here
+REVENUECAT_ANDROID_KEY=your-revenuecat-android-key-here
+REVENUECAT_IOS_KEY=your-revenuecat-ios-key-here
+```
 
-### 2. Build the production AAB
+Save, then restart the dev server (`Ctrl+C`, then `npm start` again). `.env` is in `.gitignore` — never commit it.
+
+**Option B — EAS secrets (for cloud builds, most secure)**
+
+Your local `.env` isn't uploaded when you run `eas build` — set keys as encrypted EAS secrets instead:
 
 ```bash
-eas build -p android --profile production
+eas secret:create --name SARVAM_API_KEY         --value "your-sarvam-key"
+eas secret:create --name REVENUECAT_ANDROID_KEY --value "your-revenuecat-android-key"
 ```
 
-This produces a signed `.aab` ready for Play Console upload.
+Verify with `eas secret:list`. These are encrypted and injected at build time — never in source or git history. **Recommended for production.**
 
-### 3. (Optional) Preview APK for QA
+**Option C — `eas.json` env block (different keys per build profile)**
 
+```json
+{
+  "build": {
+    "preview": {
+      "env": { "SARVAM_API_KEY": "test-key-for-preview" }
+    },
+    "production": {
+      "env": { "SARVAM_API_KEY": "production-key" }
+    }
+  }
+}
+```
+
+> **Warning**: keys in `eas.json` are visible in source. Only use this for non-sensitive values — for real secrets, use Option B.
+
+### How the keys flow through the app
+
+**Build time** (`npm start` or `eas build`): Expo reads your `.env` / EAS secrets / `eas.json` env, injects them via `process.env.SARVAM_API_KEY` etc. into `app.config.ts`'s `extra` block, and bakes that into the app binary as `Constants.expoConfig.extra`.
+
+**Runtime**: `src/lib/voice.ts` and `src/lib/revenuecat.ts` read the relevant key from `Constants.expoConfig.extra.*`. If missing, each feature no-ops gracefully — no crash, no blocked flow.
+
+| Feature | Without key | With key |
+|---|---|---|
+| Voice notes | Mic button shows "Set SARVAM_API_KEY to enable". Entry saves without a note. | Mic records → Sarvam transcribes → transcript stored |
+| RevenueCat | No-op (silently skips init) | Tracks ad revenue to your RC dashboard |
+| Google Ads | Banner renders labelled "Ad" placeholder. No interstitial. | Real banner + interstitial ads from AdMob |
+
+### Security notes
+
+- **Never commit `.env`.** It's in `.gitignore` — leave it that way.
+- **Never hard-code keys in `src/` files.** Always read from `Constants.expoConfig.extra.*`.
+- **The RevenueCat Android SDK key is safe to ship in the APK** — it's a public SDK key, not a secret. Anyone with the APK can extract it, but it can only display your ads, not access your account.
+- **The Sarvam API key IS a secret.** Ship it via EAS secrets, never in source. For maximum security in a production app, proxy Sarvam calls through your own backend instead of calling it directly from the client — out of scope for this build but worth doing before a real public launch.
+- **Run `npm run audit`** before every release.
+
+### Verifying your keys work
+
+**Sarvam**: open the app, log a spending entry, tap the mic, speak a short note, stop. Watch the Metro terminal for `[voice] Sarvam response status: 200` and a transcript — that confirms the key and the full recording → upload → transcription pipeline. To check the key independently of the app:
 ```bash
-eas build -p android --profile preview
+curl -X POST https://api.sarvam.ai/speech-to-text \
+  -H "api-subscription-key: $SARVAM_API_KEY" \
+  -F "model=saaras:v4" \
+  -F "file=@/path/to/sample.wav"
 ```
+A 200 response with a `transcript` field means the key is good.
 
-### 4. Submit to Play Store
-
-```bash
-eas submit -p android --profile production
-# or upload the .aab manually via Play Console
-```
-
-> You'll need a Google Play service account JSON key — save it as `google-service-account.json` (gitignored) and reference it in `eas.json -> submit`.
-
-### 5. Fill in Play Store listing
-
-In the Play Console:
-- **App name**: Nidhi
-- **Short description**: Financial discipline for everyday earners.
-- **Full description**: See `PLAY_STORE_LISTING.md` (or copy from this README's intro).
-- **Privacy policy URL**: Required — Nidhi stores all data locally and only contacts Sarvam AI for optional voice transcription. See `SECURITY.md` for the data-flow summary.
-- **Content rating**: Everyone (no mature content)
-- **Target audience**: 18+ (financial tool)
-- **Ads**: Yes (RevenueCat Ads SDK)
+**RevenueCat**: run the app, check the Dashboard for a real banner ad (not the placeholder), then log an entry and check for an interstitial. If nothing real appears, confirm your RevenueCat dashboard's ad placement IDs match `dashboard_banner` and `post_log_interstitial`.
 
 ---
 
@@ -596,202 +447,141 @@ In the Play Console:
 - Voice is fully optional and decoupled — the logging flow works with voice disabled or failing.
 - Robustness: 30s timeout via AbortController; on any failure (network, timeout, non-2xx, empty transcript) the function returns `null` and the entry saves without a note — it never blocks logging.
 
-> **Status (2026-10-01): working end-to-end.** Recording, upload, and transcription were verified
-> on-device. Getting here took three separate fixes in `src/lib/voice.ts` and
-> `src/components/ui/MicButton.tsx` — see **Resolved Issues** at the bottom of this README.
+> **Status (2026-10-01): working end-to-end.** Recording, upload, and transcription were verified on-device. Getting here took three separate fixes — see **Resolved Issues** below for the full diagnosis.
 
 ### RevenueCat + Google Mobile Ads (Ads only — no paywall, no IAP)
 
-Nidhi uses two SDKs together for ad monetization:
+Two SDKs work together for ad monetization:
 
 1. **Google Mobile Ads SDK** (`react-native-google-mobile-ads@17.x`) — loads and displays the actual banner + interstitial ads via AdMob.
-2. **RevenueCat SDK** (`react-native-purchases@10.x`) — tracks ad revenue + lifecycle events (impressions, opens, loads, failures) for attribution. This lets you see ad revenue in your RevenueCat dashboard alongside subscription revenue.
+2. **RevenueCat SDK** (`react-native-purchases@10.x`) — tracks ad revenue + lifecycle events for attribution, visible in your RevenueCat dashboard alongside subscription revenue.
 
-**Ad placements (per spec)**:
-- **Banner** on the Dashboard (always-on, visually labelled "Ad")
-- **Light interstitial** AFTER completing a daily log (never before — never interrupts the core task of logging)
+**Ad placements**: Banner on the Dashboard (always-on, labelled "Ad"). Light interstitial after completing a daily log (never before — never interrupts the core task).
 
-**All ad units are visually labelled "Ad"** so they're never mistaken for real financial data.
-
-**Build support**:
-- Both `react-native-purchases` and `react-native-google-mobile-ads` are native modules.
-- The **EAS dev build** (`eas build -p android --profile development`) includes both modules — ads work properly.
-- If a key is missing, the SDK gracefully no-ops (no ad served, no crash). The banner slot renders a labelled "Ad" placeholder.
-- Expo Go is **not supported** for this app.
-
-**Default ad unit IDs**:
-- For development, the app uses Google's official **test ad unit IDs** (already configured as defaults in `app.config.ts`). This protects you from being flagged for invalid traffic on your real ad units.
-- For production, replace with your real AdMob ad unit IDs (see "API keys" section below).
+Both are native modules included in the EAS dev build. If a key is missing, each SDK no-ops gracefully (no crash). Expo Go is **not supported**.
 
 ### Local notifications (expo-notifications)
 
-Five toggleable channels:
-1. Daily log reminder (end of day)
-2. Large/unusual expense alert (rolling-average comparison)
-3. EMI due reminder (a day before EMI payment date)
-4. Locked Savings / Emergency Fund set-aside nudge (weekly)
-5. Emergency Fund milestone (celebratory)
-
-All notifications respect the user's per-type toggles in Settings. All use warm amber or positive green copy — never alarming red.
+Five toggleable channels: daily log reminder, large/unusual expense alert (rolling-average comparison), EMI due reminder, Locked Savings / Emergency Fund weekly nudge, and Emergency Fund milestone (celebratory). All respect per-type Settings toggles. All use warm amber or positive green copy — never alarming red.
 
 ---
 
-## API keys — where to put them and how they work
+## Other build profiles (for distribution)
 
-Nidhi uses two external services: **Sarvam AI** (optional voice transcription) and **RevenueCat** (ads). Both require API keys. Here's the complete guide.
-
-### What keys do I need?
-
-| Service | Key name | Required for | Get one at |
-|---|---|---|---|
-| Sarvam AI | `SARVAM_API_KEY` | Voice notes (optional — app works fully without) | https://sarvam.ai/ |
-| RevenueCat (Android) | `REVENUECAT_ANDROID_KEY` | Ad revenue attribution (optional — ads work without) | https://app.revenuecat.com/ |
-| RevenueCat (iOS) | `REVENUECAT_IOS_KEY` | Ad attribution on iOS (only if you build for iOS) | https://app.revenuecat.com/ |
-| Google Ads App ID | `GOOGLE_ADS_ANDROID_APP_ID` | Banner + interstitial ad display (defaults to Google's test ID) | https://apps.admob.com/ |
-| Google Ads Banner Unit ID | `GOOGLE_ADS_BANNER_UNIT_ID` | Banner ad unit (defaults to Google's test ID) | https://apps.admob.com/ |
-| Google Ads Interstitial Unit ID | `GOOGLE_ADS_INTERSTITIAL_UNIT_ID` | Interstitial ad unit (defaults to Google's test ID) | https://apps.admob.com/ |
-
-> **The app works 100% without these keys.** Voice notes and ads silently no-op. You only need keys to actually test those features.
->
-> **For development**, leave the Google Ads keys blank — the app uses Google's official **test ad unit IDs** by default. This protects you from being flagged for invalid traffic on your real ad units. Only set real ad unit IDs when you're ready to publish to the Play Store.
-
-### Where do I put the keys?
-
-There are **three places** you can put keys, depending on your use case:
-
-#### Option A: Local development (fastest — for testing on your own phone via EAS dev build)
-
-1. In the project root, create a file named `.env` (copy from `.env.example`):
-   ```bash
-   cp .env.example .env
-   ```
-2. Open `.env` in any text editor and fill in your keys:
-   ```env
-   SARVAM_API_KEY=your-sarvam-key-here
-   REVENUECAT_ANDROID_KEY=your-revenuecat-android-key-here
-   REVENUECAT_IOS_KEY=your-revenuecat-ios-key-here
-   ```
-3. Save the file. Restart the dev server (`npm start`).
-
-The keys are loaded at build time by Expo and injected into the app via `Constants.expoConfig.extra`.
-
-> **Important**: `.env` is in `.gitignore` — never commit your keys to git.
-
-#### Option B: EAS cloud builds (for shared / production builds)
-
-When you run `eas build`, the build happens in Expo's cloud. Your local `.env` file isn't uploaded — you set keys as EAS secrets instead:
+### Preview build (release APK for QA / sharing)
 
 ```bash
-eas login
-eas secret:create --name SARVAM_API_KEY        --value "your-sarvam-key-here"
-eas secret:create --name REVENUECAT_ANDROID_KEY --value "your-revenuecat-android-key-here"
-eas secret:create --name REVENUECAT_IOS_KEY     --value "your-revenuecat-ios-key-here"
+eas build -p android --profile preview
 ```
 
-These secrets are stored encrypted in EAS and injected at build time. They never appear in your source code or git history.
+A **release-mode APK** — no dev menu, no Metro dependency, runs standalone with the JS bundle baked in. Sideload the same way as the dev build. Takes 15–20 minutes.
 
-To verify they're set:
+### Production build (signed AAB for Play Store)
+
 ```bash
-eas secret:list
+eas build -p android --profile production
 ```
 
-#### Option C: eas.json (per-build-profile — for different keys per environment)
+Produces a signed `.aab` ready for Play Console upload.
 
-If you want different keys for `preview` vs `production` builds, edit `eas.json`:
+### Build for Google Play Store — full walkthrough
 
-```json
-{
-  "build": {
-    "preview": {
-      "env": {
-        "SARVAM_API_KEY": "test-key-for-preview-builds",
-        "REVENUECAT_ANDROID_KEY": "test-key-for-preview"
-      }
-    },
-    "production": {
-      "env": {
-        "SARVAM_API_KEY": "production-key",
-        "REVENUECAT_ANDROID_KEY": "production-key"
-      }
-    }
-  }
-}
+1. **Configure EAS** (if you haven't already run `eas init` per the setup steps above): `eas build:configure` creates/updates `eas.json`.
+2. **Build the production AAB**: `eas build -p android --profile production`
+3. **(Optional) Preview APK for QA**: `eas build -p android --profile preview`
+4. **Submit to Play Store**: `eas submit -p android --profile production`, or upload the `.aab` manually via Play Console. You'll need a Google Play service account JSON key — save as `google-service-account.json` (gitignored) and reference it in `eas.json -> submit`.
+5. **Fill in the Play Store listing**:
+   - App name: Nidhi
+   - Short description: Financial discipline for everyday earners.
+   - Full description: see `PLAY_STORE_LISTING.md`
+   - Privacy policy URL: required — see `SECURITY.md` for the data-flow summary
+   - Content rating: Everyone
+   - Target audience: 18+ (financial tool)
+   - Ads: Yes (RevenueCat Ads SDK)
+
+### Rebuilding the dev build
+
+You only need to rebuild when you change something requiring native compilation: any file under `plugins/`, `app.config.ts` (permissions, plugins, SDK versions, ad unit IDs), or a new native dependency. For pure JS/TS changes (`src/`, `app/`, `App.tsx`, `src/strings/`), just keep `npm start` running — Metro hot-reloads instantly.
+
+```bash
+eas build -p android --profile development
+# Then re-sideload the new APK (uninstall the old one first if signing differs)
 ```
 
-> Note: keys in `eas.json` are visible in source — only use this for non-sensitive keys. For real secrets, use Option B (EAS secrets).
+### Build gotchas we already patched (don't undo these)
 
-### How does it work? (the full flow)
+- `.npmrc` has `legacy-peer-deps=true`
+- `babel.config.js` uses `babel-preset-expo` only (no nativewind babel plugin, despite nativewind being in devDeps for its Tailwind types)
+- `app.config.ts` sets `compileSdkVersion: 36`, `targetSdkVersion: 36`, `minSdkVersion: 24`, and uses `./plugins/with-gradle-version` to bump the Gradle JVM heap to 4 GB
+- `scripts/postinstall-patch.js` auto-applies 4 patches on every `npm install`
+- Pinned to **Gradle 9.3.1 + Kotlin 2.1.20** — do NOT upgrade to Gradle 9.4.1, it causes a Kotlin version mismatch crash at build time
 
-Here's exactly what happens when the app starts:
+---
 
-1. **Build time** (when you run `npm start` or `eas build`):
-   - Expo reads your `.env` file (or EAS secrets, or `eas.json` env)
-   - It injects them into `app.config.ts` via `process.env.SARVAM_API_KEY` etc.
-   - The `extra` block in `app.config.ts` packages them:
-     ```ts
-     extra: {
-       sarvamApiKey: process.env.SARVAM_API_KEY ?? "",
-       revenueCatAndroidApiKey: process.env.REVENUECAT_ANDROID_KEY ?? "...",
-       revenueCatIosApiKey: process.env.REVENUECAT_IOS_KEY ?? "...",
-     }
-     ```
-   - Expo bakes these into the app binary as `Constants.expoConfig.extra`.
+## Troubleshooting
 
-2. **Runtime** (when the app runs on a phone):
-   - `src/lib/voice.ts` reads the Sarvam key:
-     ```ts
-     const apiKey = Constants.expoConfig?.extra?.sarvamApiKey;
-     if (!apiKey) return null;  // voice disabled — entry still saves without note
-     ```
-   - `src/lib/revenuecat.ts` reads the RevenueCat key:
-     ```ts
-     const key = Constants.expoConfig?.extra?.revenueCatAndroidApiKey;
-     if (!key || key.startsWith("REPLACE_WITH")) return;  // ads disabled
-     ```
-   - The app calls Sarvam's API (`https://api.sarvam.ai/speech-to-text`) and RevenueCat's SDK with these keys.
+#### Dev build can't connect to Metro ("Waiting for Metro" forever)
+Most common cause: your phone and computer are on different networks — verify both are on the same Wi-Fi. In the dev build, shake your phone → dev menu → "Change Metro URL" → enter the URL shown in your terminal (e.g. `exp://192.168.1.42:8081`). Restart the dev server if needed.
 
-3. **Fallback behavior** (when keys are missing):
-   - **No Sarvam key**: voice button still appears, but tapping it shows "Set SARVAM_API_KEY to enable transcription". The entry saves without a note.
-   - **No RevenueCat key**: the banner ad slot renders a labelled "Ad" placeholder. No real ad is loaded.
-   - **Expo Go**: not supported — use the EAS dev build instead. (The native modules detect their absence and no-op, but other SDK 57 features also don't work in Expo Go, so it's not a usable test environment for this app.)
+#### `TypeError: Body is unusable: Body has already been read` at startup
+Known bug in `@expo/cli` 0.22.x with Node 20+. `npm start` already sets `EXPO_OFFLINE=1` to skip it. If you ran `npx expo start` directly, use `npm start` instead.
 
-### Security notes
+#### Dev build shows "Network error" after loading
+Check both devices are on the same Wi-Fi (not a guest network), and your computer's firewall isn't blocking port 8081 (allow Node.js through on Windows if prompted). Try tunnel mode: `npm start -- --tunnel`, then shake phone → Change Metro URL → enter the tunnel URL.
 
-- **Never commit your `.env` file.** It's in `.gitignore` by default — leave it that way.
-- **Never hard-code keys in `src/` files.** Always read them from `Constants.expoConfig.extra.*`.
-- **The RevenueCat Android SDK key is safe to ship in the APK** — it's a public SDK key, not a secret. Anyone with the APK can extract it, but it can only be used to display your ads, not to access your account.
-- **The Sarvam API key IS a secret.** Ship it via EAS secrets (Option B), never in source. If you must ship it in the APK, be aware that a determined reverse-engineer could extract it.
-- **For maximum security**, proxy Sarvam calls through your own backend server instead of calling Sarvam directly from the app. The app would send audio to your server, your server calls Sarvam with the secret key, and returns the transcript. This is out of scope for the current build but documented for production use.
+#### Voice notes don't work
+- Check `SARVAM_API_KEY` is actually set (see **API keys** above) — without it, the mic button shows "Set SARVAM_API_KEY to enable" and that's expected.
+- With a key set, watch the Metro terminal while recording. `[voice] Sarvam response status: 200` plus a transcript means it's working. A `4xx`/`5xx` status means a Sarvam-side issue (check your key/credit); no `[voice]` lines at all usually means the mic permission wasn't granted.
+- If the entry saves but no note appears, that's the designed graceful-failure path — the entry is never blocked on transcription.
 
-### Verifying your keys work
+#### Ads don't show
+Ads require the EAS dev build (not Expo Go). Check `REVENUECAT_ANDROID_KEY` and Google Ads keys are set. In development, the app uses Google's test ad unit IDs — real ads only appear in production builds with real IDs configured.
 
-After setting up keys, test them:
+#### Notifications don't appear
+Check Settings → Notifications are toggled on in-app, and your phone's system settings allow notifications for Nidhi (Settings → Apps → Nidhi → Notifications → Allow).
 
-1. **Sarvam**:
-   - Open the app, log a spending entry, tap the mic, speak a short note, and stop. Check the Metro terminal for `[voice] Sarvam response status: 200` and a transcript — that confirms the key and the full recording → upload → transcription pipeline all work.
-   - To verify your Sarvam key independently of the app, you can call the API directly with any short audio file:
-     ```bash
-     curl -X POST https://api.sarvam.ai/speech-to-text \
-       -H "api-subscription-key: $SARVAM_API_KEY" \
-       -F "model=saaras:v4" \
-       -F "file=@/path/to/sample.wav"
-     ```
-     A 200 response with a `transcript` field means your key is good. The fix to the recording layer is tracked in **Known Issues**.
+#### `"Unable to resolve module"` error in terminal
+Run `npm start -- --clear` to clear the Metro cache. If that doesn't help, delete `node_modules/.cache` and restart.
 
-2. **RevenueCat**:
-   - Run the app, go to the Dashboard — you should see a real banner ad (not just the "Ad" placeholder)
-   - Log a spending entry — after saving, you should see an interstitial ad
-   - If no real ad appears, check your RevenueCat dashboard to confirm the ad placement IDs match (`dashboard_banner` and `post_log_interstitial`)
+#### App crashes on launch
+Check the terminal for errors — a missing font or asset is the most common cause. Run `npm run ts:check` and `npm run lint` to rule out type/lint errors.
+
+#### `eas build` fails
+- Confirm you're logged in (`eas whoami`) and have run `eas init` (see **Before your first build** above) — a placeholder project ID causes an `Invalid UUID appId` error.
+- Check the build logs in the Expo dashboard (link printed in your terminal).
+- The `development` profile in `eas.json` uses `buildType: apk` + `developmentClient: true` + `distribution: internal` — don't change these.
+- A Kotlin/Gradle error usually means the pinned versions drifted — verify **Gradle 9.3.1 + Kotlin 2.1.20**; don't upgrade to Gradle 9.4.1.
+
+#### `npm install` fails with peer dependency errors
+Use `npm install --legacy-peer-deps` (required for Expo SDK 57). `.npmrc` already sets `legacy-peer-deps=true`, so a plain `npm install` should also work.
+
+#### Prebuild fails
+Run `node scripts/postinstall-patch.js` to (re)apply the SDK 57 patches, then retry.
+
+---
+
+## Feature support (EAS dev build)
+
+The EAS dev build supports **every feature in the app** — there's no separate "Expo Go" feature set:
+
+| Feature | EAS dev build |
+|---|---|
+| All UI / navigation | ✓ |
+| Logging spending | ✓ |
+| Savings / Emergency Fund | ✓ |
+| Insights | ✓ |
+| Settings (language, dark mode, notifications toggle) | ✓ |
+| Local notifications (Android) | ✓ |
+| Voice notes (Sarvam AI) | ✓ |
+| RevenueCat ad attribution | ✓ (requires `REVENUECAT_ANDROID_KEY`) |
+| Google Mobile Ads (banner + interstitial) | ✓ (uses Google's test ad unit IDs by default) |
+| Haptics | ✓ |
 
 ---
 
 ## Internationalization (i18n)
 
-Three languages: **English** (`en`), **Hindi** (`hi`), **Kannada** (`kn`).
-
-Pure string-swap; layouts, icons, flows are identical across languages. Source files: `src/strings/{en,hi,kn}.json`.
-
-Numbers, currency (₹), and dates follow Indian formatting regardless of UI language (e.g., `1,00,000` not `100,000`).
+Three languages: **English** (`en`), **Hindi** (`hi`), **Kannada** (`kn`). Pure string-swap; layouts, icons, flows are identical across languages. Source files: `src/strings/{en,hi,kn}.json`. Numbers, currency (₹), and dates follow Indian formatting regardless of UI language (e.g., `1,00,000` not `100,000`).
 
 ---
 
@@ -834,10 +624,7 @@ npm run audit          # Security — categorizes vulns (runtime vs build-time)
 npx expo prebuild --platform android --no-install   # Native build config validates
 ```
 
-Or all-in-one:
-```bash
-npm run verify         # runs tsc + eslint + jest in sequence
-```
+Or all-in-one: `npm run verify` (runs tsc + eslint + jest in sequence).
 
 > **About `npm audit`**: Nidhi is built on the Expo SDK + React Native, which pull in a large tree of build-time/dev-only transitive dependencies. As of September 2026, `npm audit` reports ~42 vulnerabilities — but **all of them are in build-time tooling that does NOT ship to end users** (Expo CLI, Metro bundler, EAS CLI, Jest, npm cache internals, iOS build tools). The 3 criticals (`eas-cli`, `form-data`, `tar`) are all build-time only. The production APK contains zero known vulnerabilities. Run `npm run audit` to see the categorized breakdown.
 
@@ -858,11 +645,9 @@ The test suite covers all critical pure logic — **169 tests, 10 suites, 100% g
 | `typography.test.ts` | Font family/weight resolution, type scale |
 | `appStore.test.ts` | Zustand store actions (addEmi, addSpending, etc.) |
 | `i18n-keys.test.ts` | i18n string key parity across en/hi/kn |
-| `voice.test.ts` | Sarvam API client (multipart upload, retry logic, timeout) |
-| `voice-retry.test.ts` | Transient-error retry behaviour (5xx retries, 4xx fails, abort) |
-| `revenuecat.test.ts` | RevenueCat + Google Ads init guards, key sanitisation |
-
-### Run tests
+| `voice.test.ts` | Sarvam API client (multipart upload via `File`, error handling, timeout) |
+| `voice-retry.test.ts` | Error-path behavior (4xx/5xx handling, abort) |
+| `revenuecat.test.ts` | RevenueCat + Google Ads init guards, `LOG_LEVEL` string-enum correctness |
 
 ```bash
 npm run test           # one-shot
@@ -870,18 +655,9 @@ npm run test:watch     # watch mode
 npm run test:coverage  # with coverage report
 ```
 
-### What's tested vs. what's not
+**Tested**: all pure functions (validation, formatting, storage, categories, typography) + Zustand store actions.
 
-**Tested**: All pure functions (validation, formatting, storage, categories, typography) + Zustand store actions.
-
-**Not yet tested** (would need React Native testing library + integration setup):
-- Component rendering
-- Screen navigation flows
-- Sarvam AI network calls
-- RevenueCat SDK calls
-- expo-notifications scheduling (requires native env)
-
-To add component/integration tests, see `CONTRIBUTING.md` → "Adding tests".
+**Not yet tested** (would need React Native testing library + integration setup): component rendering, screen navigation flows, live Sarvam/RevenueCat network calls, `expo-notifications` scheduling (requires native env). See `CONTRIBUTING.md` → "Adding tests".
 
 ---
 
@@ -891,13 +667,13 @@ To add component/integration tests, see `CONTRIBUTING.md` → "Adding tests".
 
 **Symptom (as originally shipped)**: Tapping the mic, recording, and stopping produced no transcript — the app showed "Couldn't transcribe — entry will still save without a note" every time. The entry still saved correctly; only the transcription step failed.
 
-**Root cause — three separate bugs, found by working backward through the pipeline**:
+**Root cause — three separate bugs, found by working backward through the pipeline:**
 
 1. **Recorder never prepared.** `src/components/ui/MicButton.tsx` called `recorder.record()` directly. `expo-audio`'s recorder must be prepared first with `await recorder.prepareToRecordAsync()`, or nothing is actually captured and `recorder.uri` stays `null` after `stop()`.
 2. **Legacy file APIs throw in SDK 57.** The original `src/lib/voice.ts` used `FileSystem.getInfoAsync()` / `readAsStringAsync()` from `expo-file-system`. In the installed SDK 57 version of that package these throw rather than returning a result, so the upload path failed before it ever reached Sarvam.
 3. **The upload format itself was wrong, twice.** First attempt: a hand-built multipart body with the audio pasted in as base64 text — Sarvam received text, not audio. Second attempt, after switching to `FormData` with the classic React Native `{ uri, name, type }` file-part object: this threw `Unsupported FormDataPart implementation`, because Expo SDK 57 replaces the global `fetch` with its own implementation (`expo/fetch`), whose multipart encoder only accepts a string, a real `Blob`, or an object exposing `bytes()` — not the `{ uri, name, type }` shape every React Native guide recommends. The fix: wrap the recording in `expo-file-system`'s `File` class, which implements `Blob`, and append that to `FormData` instead.
 
-**Fix locations**: `src/components/ui/MicButton.tsx` (prepare + auto-stop at 28s, since Sarvam's REST endpoint caps audio at 30s) and `src/lib/voice.ts` (File-based upload, no legacy file APIs). Tests in `src/lib/__tests__/voice.test.ts` and `voice-retry.test.ts` were rewritten to match.
+**Fix locations**: `src/components/ui/MicButton.tsx` (prepare + auto-stop at 28s, since Sarvam's REST endpoint caps audio at 30s) and `src/lib/voice.ts` (`File`-based upload, no legacy file APIs). Tests in `src/lib/__tests__/voice.test.ts` and `voice-retry.test.ts` were rewritten to match.
 
 **Verified**: on-device, with a real recording — Metro log showed `[voice] Sarvam response status: 200` and a correct Hindi transcript.
 
@@ -927,9 +703,11 @@ These are deliberate product decisions, not technical limitations.
 
 ## License
 
-Proprietary. © Nidhi. All rights reserved.
+Proprietary. © 2026 Nandan Bhat. All rights reserved.
 
-For licensing inquiries: `hello@nidhi.app` (replace with your real address).
+This software and its source code may not be used, copied, modified, merged, published, distributed, sublicensed, or sold without prior written permission from the copyright holder. See [`LICENSE`](./LICENSE) for the full text and [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) for bundled open-source components and their licenses.
+
+For licensing inquiries: **nandangbsn@gmail.com**
 
 ---
 
@@ -950,3 +728,6 @@ For licensing inquiries: `hello@nidhi.app` (replace with your real address).
 **Nidhi** — *Your money, kept close.*
 
 Built with care for everyday earners.
+
+</div>
+
