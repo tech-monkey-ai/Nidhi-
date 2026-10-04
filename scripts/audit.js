@@ -82,7 +82,9 @@ function categorize(data) {
     // nanoid (used by build tools)
     "nanoid",
     // expo-router bundler-time helpers (URL parsing for the dev server / bundler)
-    "query-string", "decode-uri-component",
+    "query-string", "decode-uri-component", "metro-file-map",
+"braces",
+"micromatch",
   ]);
 
   // Top-level packages whose ONLY vulnerable paths go through build-time tools.
